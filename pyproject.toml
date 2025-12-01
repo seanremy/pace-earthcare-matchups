@@ -1,0 +1,7 @@
+[project]
+name = "pace_earthcare_matchups"
+dynamic = ["version"]
+authors = [{ name = "Sean Foley", email = "sean.r.foley@nasa.gov" }]
+dependencies = [
+    "netCDF4",
+]

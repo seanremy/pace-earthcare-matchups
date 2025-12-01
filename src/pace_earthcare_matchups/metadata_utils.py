@@ -14,6 +14,9 @@ from shapely import (
     MultiPolygon,
     Polygon,
 )
+from shapely.geometry import box
+
+from pace_earthcare_matchups.geospatial_utils import correct_polygon
 
 
 MAAP_DT_FMT = "%Y-%m-%dT%H:%M:%SZ"
@@ -29,19 +32,35 @@ UTC = ZoneInfo("UTC")
 #     return {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [coords]}}
 
 
-def polygon_from_granule(granule: Granule) -> Polygon:
+def polygon_from_granule(granule: Granule) -> Polygon | MultiPolygon:
     """TODO"""
     hsd = granule['Granule']['Spatial']['HorizontalSpatialDomain']
     points = hsd['Geometry']['GPolygon']['Boundary']['Point']
     coords = [[point['PointLongitude'], point['PointLatitude']] for point in points]
     coords = np.array(coords).astype(float)
-    return Polygon(coords)
+    return correct_polygon(Polygon(coords))
 
 
 def geometry_from_item(item: Item) -> Geometry:
     """TODO"""
     # currently assume linestring
     return LineString(item.geometry['coordinates'])
+
+
+def get_intersection_bbox(granule_pace: Granule, item_earthcare: Item) -> Polygon:
+    """Get latlon bbox of PACE/EarthCARE metadata intersection.
+    TODO
+    """
+    poly_pace = polygon_from_granule(granule_pace)
+    geom_earthcare = geometry_from_item(item_earthcare)
+    inter = poly_pace.intersection(geom_earthcare)
+    if isinstance(inter, MultiLineString):
+        lon, lat = np.concatenate([np.array(g.coords.xy) for g in inter.geoms], axis=-1)
+    elif isinstance(inter, MultiPolygon):
+        lon, lat = np.concatenate([np.array(g.exterior.coords.xy) for g in inter.geoms], axis=-1)
+    else:
+        lon, lat = np.array(inter.coords.xy)
+    return box(lon.min(), lat.min(), lon.max(), lat.max())
 
 
 def get_datetime_range_from_granule(
@@ -59,6 +78,21 @@ def get_datetime_range_from_granule(
         '%Y-%m-%dT%H:%M:%S.000Z',
     ).replace(tzinfo=UTC)
     return dt_start - max_offset, dt_end + max_offset
+
+
+def filter_granules(
+    granules: list,
+    max_duration: timedelta = timedelta(hours=1)
+) -> list:
+    """Throw away granules with broken duration metadata.
+    TODO
+    """
+    filtered = []
+    for granule in granules:
+        dt_range = get_datetime_range_from_granule(granule)
+        if dt_range[1] - dt_range[0] <= max_duration:
+            filtered.append(granule)
+    return filtered
 
 
 def get_datetime_range_maap(start: datetime, end: datetime) -> str:

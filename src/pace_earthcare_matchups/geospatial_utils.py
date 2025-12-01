@@ -259,6 +259,7 @@ def vincenty_point_along_geodesic(
 
 
 def get_antemeridian_intersection(latlon1, latlon2, tol=1e-6, max_iters=1000):
+    """TODO"""
     dists, alpha1, _ = vincenty_distance(latlon1, latlon2)
 
     lon_sign = np.sign(latlon1[1])
@@ -278,16 +279,6 @@ def get_antemeridian_intersection(latlon1, latlon2, tol=1e-6, max_iters=1000):
         converged = np.abs(am_lon_diffs) < tol
         i += 1
     return latlon_am[0]
-
-
-# def polygon_to_geojson(poly: MultiPolygon | Polygon) -> dict:
-#     """TODO"""
-#     assert isinstance(poly, Polygon) or isinstance(poly, MultiPolygon)
-#     if isinstance(poly, MultiPolygon):
-#         coords = [np.array(g.exterior.coords.xy).T.tolist() for g in poly.geoms]
-#         return {"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": coords}}
-#     coords = [np.array(poly.exterior.coords.xy).T.tolist()]
-#     return {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": coords}}
 
 
 def correct_polygon(poly: Polygon) -> Polygon | MultiPolygon:
@@ -363,11 +354,65 @@ def correct_linestring(line: LineString) -> LineString | MultiLineString:
         coords[idx] = np.concatenate([coords[idx], lonlat_split1[idx, None]], axis=0)
         coords[idx + 1] = np.concatenate([lonlat_split2[idx, None], coords[idx + 1]], axis=0)
     return MultiLineString([LineString(c) for c in coords])
-    
-    # geoms = []
-    # for c in coords:
-    #     if c.shape[0] > 1:
-    #         geoms.append(LineString(c))
-    #     else:
-    #         geoms.append(Point(c))
-    # return GeometryCollection(geoms)
+
+
+def get_centered_latlon(lat, lon):
+    """TODO"""
+    cross_180 = (np.nanmax(lon) - np.nanmin(lon)) > 180
+    if cross_180:
+        central_lon = np.nanmean((lon + 180) / 360) - 180
+    else:
+        central_lon = np.nanmean(lon)
+    central_lat = np.nanmean(lat)
+    return central_lat, central_lon
+
+
+def central_latlon_to_rot_mtx(central_lat, central_lon):
+    """Get a rotation matrix from spherical ECEF to center on the specified
+    latitude and longitude. TODO: type hints
+    """
+    theta = -central_lon * np.pi / 180
+    rot_mtx_z = np.array(
+        [
+            [np.cos(theta), -np.sin(theta), 0],
+            [np.sin(theta), np.cos(theta), 0],
+            [0, 0, 1],
+        ]
+    )
+    theta = central_lat * np.pi / 180
+    rot_mtx_y = np.array(
+        [
+            [np.cos(theta), 0, np.sin(theta)],
+            [0, 1, 0],
+            [-np.sin(theta), 0, np.cos(theta)],
+        ]
+    )
+    return rot_mtx_y @ rot_mtx_z
+
+
+def get_centering_function(lat, lon):
+    """TODO
+    """
+    central_lat, central_lon = get_centered_latlon(lat, lon)
+    rot_mtx = central_latlon_to_rot_mtx(central_lat, central_lon)[None]
+    def centering_function(lat, lon):
+        cos_lat = np.cos(np.radians(lat))
+        cos_lon = np.cos(np.radians(lon))
+        sin_lat = np.sin(np.radians(lat))
+        sin_lon = np.sin(np.radians(lon))
+        xyz = np.stack([cos_lat * cos_lon, cos_lat * sin_lon, sin_lat], axis=-1)
+        shp = xyz.shape
+        xyz = np.reshape(xyz, (-1, 3))
+        xyz_rot = np.zeros_like(xyz)
+        num_batches = int(np.ceil(lat.size / 1e6))
+        for i in range(num_batches):
+            start = int(i * 1e6)
+            end = int(min(lat.size, (i + 1) * 1e6))
+            xyz_rot[start:end] = (rot_mtx @ xyz[start:end, :, None])[..., 0]
+        xyz_rot = np.reshape(xyz_rot, shp)
+        lat_rot = np.degrees(np.arcsin(xyz_rot[..., 2]))
+        lon_rot = np.degrees(np.arctan2(xyz_rot[..., 1], xyz_rot[..., 0]))
+        return lat_rot, lon_rot
+    return centering_function
+
+
