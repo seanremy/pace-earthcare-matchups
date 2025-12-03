@@ -3,5 +3,28 @@ name = "pace_earthcare_matchups"
 dynamic = ["version"]
 authors = [{ name = "Sean Foley", email = "sean.r.foley@nasa.gov" }]
 dependencies = [
+    "cartopy",
+    "h5py",
+    "maap",
     "netCDF4",
+    "pystac_client",
+    "shapely",
+    "tqdm",
+]
+
+[tool.pyright]
+typeCheckingMode = "standard"
+include = ["src"]
+ignore = []
+exclude = ["data"]
+
+[tool.ruff]
+exclude = [
+  ".git",
+  ".ipynb_checkpoints",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".vscode",
+  "*.ipynb",
+  "data",
 ]

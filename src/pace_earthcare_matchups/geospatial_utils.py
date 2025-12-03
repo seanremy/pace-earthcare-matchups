@@ -1,6 +1,5 @@
 """TODO"""
 
-
 import numpy as np
 import numpy.typing as npt
 from shapely import (
@@ -25,7 +24,7 @@ def vincenty_distance(
     latlon2: npt.NDArray[np.float64],
     tol: float = 1e-12,
     max_iters: int = 10,
-) -> npt.NDArray[np.float64]:
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Compute geodesic distance using Vincenty's formulae and the WGS-84 ellipsoid.
 
     See: https://en.wikipedia.org/wiki/Vincenty%27s_formulae#Inverse_problem
@@ -60,7 +59,11 @@ def vincenty_distance(
     lambd_diff = 1000
     num_iters = 0
 
-    sin_sigma, cos_sigma, sigma, cos2_alpha, cos_2sigmam = 0, 0, 0, 0, 0
+    sin_sigma = np.zeros_like(U1)
+    cos_sigma = np.zeros_like(U1)
+    sigma = np.zeros_like(U1)
+    cos2_alpha = np.zeros_like(U1)
+    cos_2sigmam = np.zeros_like(U1)
 
     while (np.abs(lambd_diff) > tol).any():
         if num_iters > max_iters:
@@ -71,15 +74,9 @@ def vincenty_distance(
 
         sin_sigma = np.sqrt(
             (np.cos(U2) * np.sin(lambd)) ** 2
-            + (
-                np.cos(U1) * np.sin(U2)
-                - np.sin(U1) * np.cos(U2) * np.cos(lambd)
-            )
-            ** 2
+            + (np.cos(U1) * np.sin(U2) - np.sin(U1) * np.cos(U2) * np.cos(lambd)) ** 2
         )
-        cos_sigma = np.sin(U1) * np.sin(U2) + np.cos(U1) * np.cos(
-            U2
-        ) * np.cos(lambd)
+        cos_sigma = np.sin(U1) * np.sin(U2) + np.cos(U1) * np.cos(U2) * np.cos(lambd)
         sigma = np.arctan2(sin_sigma, cos_sigma)
 
         sin_alpha = np.cos(U1) * np.cos(U2) * np.sin(lambd) / sin_sigma
@@ -119,13 +116,11 @@ def vincenty_distance(
     s = WGS_84_B * A * (sigma - delta_sigma)
     alpha1 = np.arctan2(
         np.cos(U2) * np.sin(lambd),
-        np.cos(U1) * np.sin(U2)
-        - np.sin(U1) * np.cos(U2) * np.cos(lambd),
+        np.cos(U1) * np.sin(U2) - np.sin(U1) * np.cos(U2) * np.cos(lambd),
     )
     alpha2 = np.arctan2(
         np.cos(U1) * np.sin(lambd),
-        -np.sin(U1) * np.cos(U2)
-        + np.cos(U1) * np.sin(U2) * np.cos(lambd),
+        -np.sin(U1) * np.cos(U2) + np.cos(U1) * np.sin(U2) * np.cos(lambd),
     )
 
     return s, alpha1 * 180 / np.pi, alpha2 * 180 / np.pi
@@ -137,7 +132,10 @@ def vincenty_point_along_geodesic(
     s: npt.NDArray[np.float64],
     tol: float = 1e-6,
     max_iters: int = 10,
-) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+) -> tuple[
+    tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]] | npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+]:
     """Compute destination locations along geodesics defined by starting locations,
     azimuth angles, and distances.
 
@@ -215,22 +213,17 @@ def vincenty_point_along_geodesic(
         num_iters += 1
 
     lat2 = np.arctan2(
-        np.sin(U1) * np.cos(sigma)
-        + np.cos(U1) * np.sin(sigma) * np.cos(alpha1),
+        np.sin(U1) * np.cos(sigma) + np.cos(U1) * np.sin(sigma) * np.cos(alpha1),
         (1 - WGS_84_F)
         * np.sqrt(
             sin_alpha**2
-            + (
-                np.sin(U1) * np.sin(sigma)
-                - np.cos(U1) * np.cos(sigma) * np.cos(alpha1)
-            )
+            + (np.sin(U1) * np.sin(sigma) - np.cos(U1) * np.cos(sigma) * np.cos(alpha1))
             ** 2
         ),
     )
     lambd = np.arctan2(
         np.sin(sigma) * np.sin(alpha1),
-        np.cos(U1) * np.cos(sigma)
-        - np.sin(U1) * np.sin(sigma) * np.cos(alpha1),
+        np.cos(U1) * np.cos(sigma) - np.sin(U1) * np.sin(sigma) * np.cos(alpha1),
     )
     C = (
         (WGS_84_F / 16)
@@ -246,8 +239,7 @@ def vincenty_point_along_geodesic(
     lon2 = L + lon1
     alpha2 = np.arctan2(
         sin_alpha,
-        -np.sin(U1) * np.sin(sigma)
-        + np.cos(U1) * np.cos(sigma) * np.cos(alpha1),
+        -np.sin(U1) * np.sin(sigma) + np.cos(U1) * np.cos(sigma) * np.cos(alpha1),
     )
 
     lat2, lon2 = lat2 * 180 / np.pi, lon2 * 180 / np.pi
@@ -288,8 +280,10 @@ def correct_polygon(poly: Polygon) -> Polygon | MultiPolygon:
     # if we have 0 jumps, check this polygon is valid, then return it
     if lon_jumps.shape[0] == 0:
         if not poly.is_valid:
-            raise ValueError("This polygon appears to be malformed for reasons unrelated to the antemeridian.")
-        return poly    
+            raise ValueError(
+                "This polygon appears to be malformed for reasons unrelated to the antemeridian."
+            )
+        return poly
     # if we have 1 jump, this granule includes a pole
     if lon_jumps.shape[0] == 1:
         # TODO
@@ -299,14 +293,20 @@ def correct_polygon(poly: Polygon) -> Polygon | MultiPolygon:
         # add a point at the antemeridian and a ring of points near the pole
         lon_ring = -np.arange(-180, 181, 60) * np.sign(lonlat[0, lon_jumps[0]])
         polar_lat = np.repeat(np.sign(lat_am) * 89.999, lon_ring.shape[0])
-        lonlat_pole = np.concatenate([
-            lonlat[:, :lon_jumps[0] + 1],
-            np.stack([
-                lon_ring,
-                polar_lat,
-            ], axis=0),
-            lonlat[:, lon_jumps[0] + 1:],
-        ], axis=1)
+        lonlat_pole = np.concatenate(
+            [
+                lonlat[:, : lon_jumps[0] + 1],
+                np.stack(
+                    [
+                        lon_ring,
+                        polar_lat,
+                    ],
+                    axis=0,
+                ),
+                lonlat[:, lon_jumps[0] + 1 :],
+            ],
+            axis=1,
+        )
         return Polygon(lonlat_pole.T)
     # if we have 2 jumps, this granule crosses the dateline but does not include a pole
     elif lon_jumps.shape[0] == 2:
@@ -314,25 +314,39 @@ def correct_polygon(poly: Polygon) -> Polygon | MultiPolygon:
         latlon2 = lonlat[:, lon_jumps + 1][::-1]
         lat_am = get_antemeridian_intersection(latlon1, latlon2)
         # split into two polygons at the antemeridian
-        lonlat_split1 = np.concatenate([
-            lonlat[:, :lon_jumps[0] + 1],
-            np.stack([
-                np.zeros_like(lat_am) + np.sign(lonlat[0, lon_jumps[0]]) * 180,
-                lat_am,
-            ], axis=0),
-            lonlat[:, lon_jumps[1] + 1:],
-        ], axis=1)
-        lonlat_split2 = np.concatenate([
-            np.stack([
-                np.zeros_like(lat_am) + np.sign(lonlat[0, lon_jumps[1]]) * 180,
-                lat_am
-            ], axis=0)[:, ::-1],
-            lonlat[:, lon_jumps[0] + 1:lon_jumps[1] + 1],
-        ], axis=1)
+        lonlat_split1 = np.concatenate(
+            [
+                lonlat[:, : lon_jumps[0] + 1],
+                np.stack(
+                    [
+                        np.zeros_like(lat_am) + np.sign(lonlat[0, lon_jumps[0]]) * 180,
+                        lat_am,
+                    ],
+                    axis=0,
+                ),
+                lonlat[:, lon_jumps[1] + 1 :],
+            ],
+            axis=1,
+        )
+        lonlat_split2 = np.concatenate(
+            [
+                np.stack(
+                    [
+                        np.zeros_like(lat_am) + np.sign(lonlat[0, lon_jumps[1]]) * 180,
+                        lat_am,
+                    ],
+                    axis=0,
+                )[:, ::-1],
+                lonlat[:, lon_jumps[0] + 1 : lon_jumps[1] + 1],
+            ],
+            axis=1,
+        )
         return MultiPolygon([Polygon(lonlat_split1.T), Polygon(lonlat_split2.T)])
     else:
-        raise ValueError("Was not expecting a polygon with more than 2 jumps "
-                         "in longitude exceeding 180 degrees.")
+        raise ValueError(
+            "Was not expecting a polygon with more than 2 jumps "
+            "in longitude exceeding 180 degrees."
+        )
 
 
 def correct_linestring(line: LineString) -> LineString | MultiLineString:
@@ -348,11 +362,13 @@ def correct_linestring(line: LineString) -> LineString | MultiLineString:
 
     lonlat_split1 = np.stack([np.sign(latlon1[1]) * 180, lat_am], axis=1)
     lonlat_split2 = np.stack([np.sign(latlon2[1]) * 180, lat_am], axis=1)
-    
+
     coords = [c.T for c in np.split(lonlat, lon_jumps + 1, axis=1)]
     for idx in range(lon_jumps.shape[0]):
         coords[idx] = np.concatenate([coords[idx], lonlat_split1[idx, None]], axis=0)
-        coords[idx + 1] = np.concatenate([lonlat_split2[idx, None], coords[idx + 1]], axis=0)
+        coords[idx + 1] = np.concatenate(
+            [lonlat_split2[idx, None], coords[idx + 1]], axis=0
+        )
     return MultiLineString([LineString(c) for c in coords])
 
 
@@ -391,10 +407,10 @@ def central_latlon_to_rot_mtx(central_lat, central_lon):
 
 
 def get_centering_function(lat, lon):
-    """TODO
-    """
+    """TODO"""
     central_lat, central_lon = get_centered_latlon(lat, lon)
     rot_mtx = central_latlon_to_rot_mtx(central_lat, central_lon)[None]
+
     def centering_function(lat, lon):
         cos_lat = np.cos(np.radians(lat))
         cos_lon = np.cos(np.radians(lon))
@@ -413,6 +429,5 @@ def get_centering_function(lat, lon):
         lat_rot = np.degrees(np.arcsin(xyz_rot[..., 2]))
         lon_rot = np.degrees(np.arctan2(xyz_rot[..., 1], xyz_rot[..., 0]))
         return lat_rot, lon_rot
+
     return centering_function
-
-

@@ -18,15 +18,15 @@ def get_short_term_token(long_term_token: str) -> str:
             "client_secret": "p1eL7uonXs6MDxtGbgKdPVRAmnGxHpVE",
             "grant_type": "refresh_token",
             "refresh_token": long_term_token,
-            "scope": "offline_access openid"
-        }
+            "scope": "offline_access openid",
+        },
     )
     response.raise_for_status()
     access_token = response.json().get("access_token")
     if not access_token:
         raise RuntimeError("Failed to retrieve access token from IAM response!")
     return access_token
-        
+
 
 def download_earthcare_item(item: Item, long_term_token: str, datadir: Path) -> Path:
     """TODO"""
@@ -35,8 +35,10 @@ def download_earthcare_item(item: Item, long_term_token: str, datadir: Path) -> 
     #   the truncation of ONE character off of the end of the standard
     #   EarthCARE filenames. Therefore, truncate the unnecessary "ECA_" off of
     #   EarthCARE files.
-    filename = item.assets["enclosure_h5"].title.removeprefix("ECA_")
-    path_outfile = (datadir / filename)
+    title = item.assets["enclosure_h5"].title
+    assert title
+    filename = title.removeprefix("ECA_")
+    path_outfile = datadir / filename
     if path_outfile.exists():
         return path_outfile
     response = requests.get(
@@ -45,17 +47,17 @@ def download_earthcare_item(item: Item, long_term_token: str, datadir: Path) -> 
         stream=True,
     )
     response.raise_for_status()
-    content_length = int(response.headers.get('content-length', 0))
+    content_length = int(response.headers.get("content-length", 0))
     os.makedirs(datadir, exist_ok=True)
     with open(path_outfile, "wb") as outfile:
         pbar = tqdm(
             desc=f"{filename}",
-            total=content_length // (2 ** 20),
+            total=content_length // (2**20),
             unit="MB",
         )
         # 10 MB chunks
-        for chunk in response.iter_content(chunk_size=10 * (2 ** 20)):
-            pbar.update(outfile.write(chunk) // (2 ** 20))
+        for chunk in response.iter_content(chunk_size=10 * (2**20)):
+            pbar.update(outfile.write(chunk) // (2**20))
     return path_outfile
 
 
@@ -74,9 +76,11 @@ class EarthcareNameData:
 
     def get_file_type(self) -> str:
         """TODO"""
+
         def _pad(s: str, plen: int = 4) -> str:
             return s + "_" * max(0, plen - len(s))
-        return  _pad(self.category) + _pad(self.product) + self.level
+
+        return _pad(self.category) + _pad(self.product) + self.level
 
 
 def parse_earthcare_filename(filename: str | Path) -> EarthcareNameData:
@@ -97,5 +101,15 @@ def parse_earthcare_filename(filename: str | Path) -> EarthcareNameData:
     val_start = parser.parse(stem_list[4])
     val_end = parser.parse(stem_list[5])
     orbit_no, frame_id = int(stem_list[6][:-1]), stem_list[6][-1]
-    return EarthcareNameData(agency, latency, baseline, category, product,
-                             level, val_start, val_end, orbit_no, frame_id)
+    return EarthcareNameData(
+        agency,
+        latency,
+        baseline,
+        category,
+        product,
+        level,
+        val_start,
+        val_end,
+        orbit_no,
+        frame_id,
+    )

@@ -16,7 +16,6 @@ import numpy.typing as npt
 from pystac_client import Client
 from pystac.item import Item
 from shapely import (
-    GEOSException,
     Point,
     Polygon,
     to_geojson,
@@ -35,6 +34,7 @@ from pace_earthcare_matchups.geospatial_utils import (
     get_centering_function,
 )
 from pace_earthcare_matchups.metadata_utils import (
+    UTC,
     filter_granules,
     get_datetime_range_from_granule,
     get_datetime_range_maap,
@@ -42,7 +42,10 @@ from pace_earthcare_matchups.metadata_utils import (
     polygon_from_granule,
 )
 from pace_earthcare_matchups.path_utils import PATH_DATA, get_path
-from pace_earthcare_matchups.supported_products import EARTHCARE_SHORTNAMES, PACE_SHORTNAMES
+from pace_earthcare_matchups.supported_products import (
+    EARTHCARE_SHORTNAMES,
+    PACE_SHORTNAMES,
+)
 
 
 CMR_HOST = "cmr.earthdata.nasa.gov"
@@ -51,6 +54,7 @@ CMR_HOST = "cmr.earthdata.nasa.gov"
 @dataclass
 class MetaMatchEarthcare:
     """TODO"""
+
     item: Item
     bbox: Polygon
 
@@ -58,13 +62,15 @@ class MetaMatchEarthcare:
 @dataclass
 class MetaMatchup:
     """TODO"""
+
     granule_pace: Granule
     matches_earthcare: list[MetaMatchEarthcare]
+
 
 @dataclass
 class MatchEarthcare:
     filepath_earthcare: Path
-    mask: npt.NDArray[bool]
+    mask: npt.NDArray[np.bool]
 
 
 @dataclass
@@ -94,11 +100,13 @@ def get_meta_matchup_from_granule(
 ) -> MetaMatchup | None:
     """TODO"""
     assert isinstance(shortnames_earthcare, list)
-    
+
     try:
         pace_poly = polygon_from_granule(granule_pace)
     except ValueError:
-        warnings.warn(f"Broken geospatial bounds in {granule_pace['Granule']['DataGranule']['ProducerGranuleId']}")
+        warnings.warn(
+            f"Broken geospatial bounds in {granule_pace['Granule']['DataGranule']['ProducerGranuleId']}"
+        )
         return
     dt_range_offset = get_datetime_range_from_granule(granule_pace, time_offset)
     # check for granules with broken timestamps
@@ -120,21 +128,30 @@ def get_meta_matchup_from_granule(
         items_dict = defaultdict(list)
         for item in items_ec:
             items_dict[item.id[9:36]].append(item)
-        items_ec = [sorted(items, key=lambda i: i.id[6:8])[-1] for items in items_dict.values()]
+        items_ec = [
+            sorted(items, key=lambda i: i.id[6:8])[-1] for items in items_dict.values()
+        ]
         meta_matches = []
         for item in items_ec:
             inter_bbox = get_intersection_bbox(granule_pace, item)
-            meta_matches.append(MetaMatchEarthcare(
-                item=item,
-                bbox=inter_bbox,
-            ))
+            meta_matches.append(
+                MetaMatchEarthcare(
+                    item=item,
+                    bbox=inter_bbox,
+                )
+            )
         return MetaMatchup(granule_pace=granule_pace, matches_earthcare=meta_matches)
 
 
-def get_matchup_mask(lat_pace, lon_pace, lat_ec, lon_ec):
+def get_matchup_mask(
+    lat_pace: npt.NDArray[np.float32],
+    lon_pace: npt.NDArray[np.float32],
+    lat_ec: npt.NDArray[np.float32],
+    lon_ec: npt.NDArray[np.float32],
+) -> npt.NDArray[np.bool]:
     """TODO: document and break into smaller functions
     TODO: handle 2D EarthCARE products with a mask
-    """    
+    """
     num_pts_per_edge = 10
     # TODO: account for dimensions of different products
     vspace = (lat_pace.shape[0] - 1) / (num_pts_per_edge - 1)
@@ -146,7 +163,9 @@ def get_matchup_mask(lat_pace, lon_pace, lat_ec, lon_ec):
     for i in range(1, num_pts_per_edge - 1):
         pts_left.append((int(i * vspace), 0))
         pts_bot.append((lat_pace.shape[0] - 1, int(i * hspace)))
-        pts_right.append((lat_pace.shape[0] - 1 - int(i * vspace), lat_pace.shape[1] - 1))
+        pts_right.append(
+            (lat_pace.shape[0] - 1 - int(i * vspace), lat_pace.shape[1] - 1)
+        )
         pts_top.append((0, lat_pace.shape[1] - 1 - int(i * hspace)))
     poly_idx = [(0, 0)]
     poly_idx += pts_left
@@ -157,15 +176,15 @@ def get_matchup_mask(lat_pace, lon_pace, lat_ec, lon_ec):
     poly_idx += [(0, lat_pace.shape[1] - 1)]
     poly_idx += pts_top
     poly_idx += [(0, 0)]
-    
+
     centering_fn = get_centering_function(lat_pace, lon_pace)
     lat_rot_ec, lon_rot_ec = centering_fn(lat_ec, lon_ec)
-    
+
     # get and rotate the lat/lon at these polygon locations, then take the mean for each angle
     lat_poly = lat_pace[[p[0] for p in poly_idx], [p[1] for p in poly_idx]]
     lon_poly = lon_pace[[p[0] for p in poly_idx], [p[1] for p in poly_idx]]
     lat_rot_poly, lon_rot_poly = centering_fn(lat_poly, lon_poly)
-    
+
     # convert to shapely polygon
     pace_poly = Polygon(zip(lon_rot_poly, lat_rot_poly))
 
@@ -174,16 +193,27 @@ def get_matchup_mask(lat_pace, lon_pace, lat_ec, lon_ec):
     lon_min_poly = np.nanmin(lon_rot_poly)
     lat_max_poly = np.nanmax(lat_rot_poly)
     lon_max_poly = np.nanmax(lon_rot_poly)
-    latlon_rot_bbox_mask = (lat_rot_ec >= lat_min_poly) * (lat_rot_ec <= lat_max_poly) * \
-                           (lon_rot_ec >= lon_min_poly) * (lon_rot_ec <= lon_max_poly)
+    latlon_rot_bbox_mask = (
+        (lat_rot_ec >= lat_min_poly)
+        * (lat_rot_ec <= lat_max_poly)
+        * (lon_rot_ec >= lon_min_poly)
+        * (lon_rot_ec <= lon_max_poly)
+    )
 
     # get mask of where the EarthCARE track is in the PACE granule
     ec_in_granule = np.zeros_like(lat_ec, dtype=bool)
-    pace_contains = np.vectorize(lambda p: pace_poly.contains(Point(p)), signature='(n)->()')
-    ec_in_granule[latlon_rot_bbox_mask] = pace_contains(np.stack([
-        lon_rot_ec[latlon_rot_bbox_mask],
-        lat_rot_ec[latlon_rot_bbox_mask],
-    ], axis=-1))
+    pace_contains = np.vectorize(
+        lambda p: pace_poly.contains(Point(p)), signature="(n)->()"
+    )
+    ec_in_granule[latlon_rot_bbox_mask] = pace_contains(
+        np.stack(
+            [
+                lon_rot_ec[latlon_rot_bbox_mask],
+                lat_rot_ec[latlon_rot_bbox_mask],
+            ],
+            axis=-1,
+        )
+    )
     return ec_in_granule
     # # get the longest contiguous
     # ec_in_granule_diff = np.diff(ec_in_granule.astype(int), prepend=np.zeros(1), append=np.zeros(1))
@@ -214,22 +244,35 @@ def get_matchup(
     path_pace = get_path(meta_matchup.granule_pace)
     if not path_pace.exists():
         os.makedirs(path_pace.parent, exist_ok=True)
-        meta_matchup.granule_pace.getData(dirpath_pace)
+        meta_matchup.granule_pace.getData(str(path_pace.parent))
     data_pace = netCDF4.Dataset(path_pace)
-    lat_pace = data_pace["geolocation_data/latitude"][:].filled(fill_value=np.nan)
-    lon_pace = data_pace["geolocation_data/longitude"][:].filled(fill_value=np.nan)
+    if "geolocation_data" in data_pace.groups:
+        lat_pace = data_pace["geolocation_data/latitude"][:].filled(fill_value=np.nan)
+        lon_pace = data_pace["geolocation_data/longitude"][:].filled(fill_value=np.nan)
+    elif "navigation_data" in data_pace.groups:
+        lat_pace = data_pace["navigation_data/latitude"][:].filled(fill_value=np.nan)
+        lon_pace = data_pace["navigation_data/longitude"][:].filled(fill_value=np.nan)
+    else:
+        print(data_pace)
+        raise NotImplementedError("Don't know how to parse this PACE product!")
 
     matches = []
     for path_earthcare in paths_earthcare:
         data_earthcare = h5py.File(path_earthcare)
-        lat_earthcare = data_earthcare['ScienceData/latitude'][:]
-        lon_earthcare = data_earthcare['ScienceData/longitude'][:]
+        lat_earthcare = data_earthcare["ScienceData/latitude"]
+        lon_earthcare = data_earthcare["ScienceData/longitude"]
+        assert isinstance(lat_earthcare, h5py.Dataset)
+        assert isinstance(lon_earthcare, h5py.Dataset)
         # start_idx, end_idx = get_matchup_start_end_idx(lat_pace, lon_pace, lat_earthcare, lon_earthcare)
-        match_mask = get_matchup_mask(lat_pace, lon_pace, lat_earthcare, lon_earthcare)
-        matches.append(MatchEarthcare(
-            filepath_earthcare=path_earthcare,
-            mask=match_mask,
-        ))
+        match_mask = get_matchup_mask(
+            lat_pace, lon_pace, lat_earthcare[()], lon_earthcare[()]
+        )
+        matches.append(
+            MatchEarthcare(
+                filepath_earthcare=path_earthcare,
+                mask=match_mask,
+            )
+        )
     return Matchup(filepath_pace=path_pace, matches_earthcare=matches)
 
 
@@ -238,30 +281,35 @@ def get_matchups(
     client_esa: Client,
     shortname_pace: str,
     shortnames_earthcare: list[str],
-    temporal: tuple[datetime],
+    temporal: tuple[datetime, datetime],
     long_term_token: str,
-    time_offset: timedelta = timedelta(minutes=5),
+    time_offset: timedelta = timedelta(),
     limit: int = 20,
     verbose: bool = True,
     save: bool = True,
 ) -> list[Matchup]:
-    """TODO
-    """
+    """TODO"""
     assert shortname_pace in PACE_SHORTNAMES
     assert isinstance(shortnames_earthcare, list)
+    if not temporal[0].tzinfo:
+        temporal = (temporal[0].astimezone(UTC), temporal[1].astimezone(UTC))
     for shortname in shortnames_earthcare:
         assert shortname in EARTHCARE_SHORTNAMES
-    results_pace = filter_granules(maap.searchGranule(
-        cmr_host=CMR_HOST,
-        short_name=shortname_pace,
-        temporal=get_datetime_range_maap(*temporal),
-        limit=20,
-    ))
+    results_pace = filter_granules(
+        maap.searchGranule(
+            cmr_host=CMR_HOST,
+            short_name=shortname_pace,
+            temporal=get_datetime_range_maap(*temporal),
+            limit=20,
+        )
+    )
     time_start = temporal[0]
     matches = []
     while len(results_pace) > 0:
         if verbose:
-            print(f"{len(matches)} matches so far, searching {len(results_pace)} {shortname_pace} results")
+            print(
+                f"{len(matches)} matches so far, searching {len(results_pace)} {shortname_pace} results"
+            )
         pbar = tqdm(results_pace) if verbose else results_pace
         for result_pace in pbar:
             dt_range = get_datetime_range_from_granule(result_pace)
@@ -271,7 +319,7 @@ def get_matchups(
                 client_esa=client_esa,
                 granule_pace=result_pace,
                 shortnames_earthcare=shortnames_earthcare,
-                time_offset=time_offset
+                time_offset=time_offset,
             )
             if meta_match:
                 match = get_matchup(meta_match, long_term_token)
@@ -280,17 +328,19 @@ def get_matchups(
                 matches.append(match)
                 if len(matches) >= limit:
                     break
-            time_start = max(time_start, dt_range[1])
+            time_start = max(time_start, dt_range[1] + timedelta(seconds=1))
         if len(matches) >= limit:
             break
         if time_start >= temporal[1]:
             break
-        results_pace = filter_granules(maap.searchGranule(
-            cmr_host=CMR_HOST,
-            short_name=shortname_pace,
-            temporal=get_datetime_range_maap(time_start, temporal[1]),
-            limit=20,
-        ))
+        results_pace = filter_granules(
+            maap.searchGranule(
+                cmr_host=CMR_HOST,
+                short_name=shortname_pace,
+                temporal=get_datetime_range_maap(time_start, temporal[1]),
+                limit=20,
+            )
+        )
     if verbose:
         print(f"Found {len(matches)} total matches!")
     return matches

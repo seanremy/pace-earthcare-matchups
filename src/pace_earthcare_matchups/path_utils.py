@@ -19,11 +19,11 @@ def get_path(obj: Granule | Item) -> Path:
         return PATH_DATA / "PACE" / instrument / level / filename
     elif isinstance(obj, Item):
         product_type = obj.properties["product:type"]
+        title = obj.assets["enclosure_h5"].title
+        assert title
         # This is extremely unfortunate, but AWS bucket name length limits
         #   require the truncation of ONE character off of the end of the
         #   standard EarthCARE filenames. Therefore, truncate the unnecessary
         #   "ECA_" prefix off of EarthCARE files.
-        filename = obj.assets["enclosure_h5"].title.removeprefix("ECA_")
+        filename = title.removeprefix("ECA_")
         return PATH_DATA / "EarthCARE" / product_type / filename
-    else:
-        raise TypeError("Expected obj to be of type Granule or Item.")

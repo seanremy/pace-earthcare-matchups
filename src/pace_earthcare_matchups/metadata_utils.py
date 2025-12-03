@@ -34,17 +34,18 @@ UTC = ZoneInfo("UTC")
 
 def polygon_from_granule(granule: Granule) -> Polygon | MultiPolygon:
     """TODO"""
-    hsd = granule['Granule']['Spatial']['HorizontalSpatialDomain']
-    points = hsd['Geometry']['GPolygon']['Boundary']['Point']
-    coords = [[point['PointLongitude'], point['PointLatitude']] for point in points]
+    hsd = granule["Granule"]["Spatial"]["HorizontalSpatialDomain"]
+    points = hsd["Geometry"]["GPolygon"]["Boundary"]["Point"]
+    coords = [[point["PointLongitude"], point["PointLatitude"]] for point in points]
     coords = np.array(coords).astype(float)
     return correct_polygon(Polygon(coords))
 
 
-def geometry_from_item(item: Item) -> Geometry:
+def geometry_from_item(item: Item) -> LineString:
     """TODO"""
     # currently assume linestring
-    return LineString(item.geometry['coordinates'])
+    assert item.geometry
+    return LineString(item.geometry["coordinates"])
 
 
 def get_intersection_bbox(granule_pace: Granule, item_earthcare: Item) -> Polygon:
@@ -57,7 +58,9 @@ def get_intersection_bbox(granule_pace: Granule, item_earthcare: Item) -> Polygo
     if isinstance(inter, MultiLineString):
         lon, lat = np.concatenate([np.array(g.coords.xy) for g in inter.geoms], axis=-1)
     elif isinstance(inter, MultiPolygon):
-        lon, lat = np.concatenate([np.array(g.exterior.coords.xy) for g in inter.geoms], axis=-1)
+        lon, lat = np.concatenate(
+            [np.array(g.exterior.coords.xy) for g in inter.geoms], axis=-1
+        )
     else:
         lon, lat = np.array(inter.coords.xy)
     return box(lon.min(), lat.min(), lon.max(), lat.max())
@@ -66,23 +69,22 @@ def get_intersection_bbox(granule_pace: Granule, item_earthcare: Item) -> Polygo
 def get_datetime_range_from_granule(
     granule: Granule,
     max_offset: timedelta = timedelta(),
-) -> (datetime, datetime):
+) -> tuple[datetime, datetime]:
     """TODO"""
-    range_datetime = granule['Granule']['Temporal']['RangeDateTime']
+    range_datetime = granule["Granule"]["Temporal"]["RangeDateTime"]
     dt_start = datetime.strptime(
-        range_datetime['BeginningDateTime'],
-        '%Y-%m-%dT%H:%M:%S.000Z',
+        range_datetime["BeginningDateTime"],
+        "%Y-%m-%dT%H:%M:%S.000Z",
     ).replace(tzinfo=UTC)
     dt_end = datetime.strptime(
-        range_datetime['EndingDateTime'],
-        '%Y-%m-%dT%H:%M:%S.000Z',
+        range_datetime["EndingDateTime"],
+        "%Y-%m-%dT%H:%M:%S.000Z",
     ).replace(tzinfo=UTC)
     return dt_start - max_offset, dt_end + max_offset
 
 
 def filter_granules(
-    granules: list,
-    max_duration: timedelta = timedelta(hours=1)
+    granules: list, max_duration: timedelta = timedelta(hours=1)
 ) -> list:
     """Throw away granules with broken duration metadata.
     TODO
