@@ -88,7 +88,6 @@ class Matchup:
 
 
 def get_meta_matchup_from_granule(
-    maap: MAAP,
     client_esa: Client,
     granule_pace: Granule,
     shortnames_earthcare: list[str],
@@ -210,15 +209,6 @@ def get_matchup_mask(
         )
     )
     return ec_in_granule
-    # # get the longest contiguous
-    # ec_in_granule_diff = np.diff(ec_in_granule.astype(int), prepend=np.zeros(1), append=np.zeros(1))
-    # ec_in_granule_start_idxs = np.where(ec_in_granule_diff == 1)[0]
-    # ec_in_granule_end_idxs = np.where(ec_in_granule_diff == -1)[0]
-    # ec_contig_lens = ec_in_granule_end_idxs - ec_in_granule_start_idxs
-    # longest_contig_idx = np.argmax(ec_contig_lens)
-    # ec_in_granule_start_idx = ec_in_granule_start_idxs[longest_contig_idx]
-    # ec_in_granule_end_idx = ec_in_granule_end_idxs[longest_contig_idx]
-    # return ec_in_granule_start_idx, ec_in_granule_end_idx
 
 
 def get_matchup(
@@ -310,7 +300,6 @@ def get_matchups(
             dt_range = get_datetime_range_from_granule(result_pace)
             assert dt_range[1] > dt_range[0]
             meta_match = get_meta_matchup_from_granule(
-                maap=maap,
                 client_esa=client_esa,
                 granule_pace=result_pace,
                 shortnames_earthcare=shortnames_earthcare,
