@@ -16,6 +16,9 @@ import numpy.typing as npt
 from pystac_client import Client
 from pystac.item import Item
 from shapely import (
+    LineString,
+    MultiLineString,
+    MultiPolygon,
     Point,
     Polygon,
     to_geojson,
@@ -27,6 +30,8 @@ from pace_earthcare_matchups.earthcare import (
     parse_earthcare_filename,
 )
 from pace_earthcare_matchups.geospatial_utils import (
+    correct_linestring,
+    correct_polygon,
     get_centering_function,
 )
 from pace_earthcare_matchups.metadata_utils import (
@@ -65,26 +70,78 @@ class MetaMatchup:
 
 @dataclass
 class MatchEarthcare:
+    """A MatchEarthcare represents an EarthCARE file to which a PACE file was matched.
+    
+    Args:
+        filepath_earthcare: Path of downloaded EarthCARE data.
+        mask: Mask into the data where it overlaps geospatially with PACE data.
+    """
     filepath_earthcare: Path
     mask: npt.NDArray[np.bool]
+
+    def get_earthcare_bounds(self, pts_per_side: int = 20) -> LineString | MultiLineString | Polygon | MultiPolygon:
+        """Get the linestring or polygon bounds for this MatchEarthcare's data.
+        
+        Args:
+            pts_per_side: Number of points per side in a polygon approximation of the
+                latitude/longitude bounds of 2D EarthCARE data.
+        """
+        data_earthcare = h5py.File(self.filepath_earthcare)
+        lat_data = data_earthcare["ScienceData/latitude"]
+        lon_data = data_earthcare["ScienceData/longitude"]
+        assert isinstance(lat_data, h5py.Dataset)
+        assert isinstance(lon_data, h5py.Dataset)
+        lat, lon = lat_data[()], lon_data[()]
+        if len(lat.shape) == 1:
+            return correct_linestring(LineString(np.stack([lon, lat], axis=-1)))
+        else:
+            # take 
+            idx_sides = [np.linspace(0, l - 1, pts_per_side).astype(int) for l in lat.shape]
+            idx0 = np.concatenate([
+                idx_sides[0][:-1],
+                np.ones(pts_per_side - 1, dtype=int) * (lat.shape[0] - 1),
+                idx_sides[0][-1:0:-1],
+                np.zeros(pts_per_side - 1, dtype=int),
+            ])
+            idx1 = np.concatenate([
+                np.zeros(pts_per_side - 1, dtype=int),
+                idx_sides[1][:-1],
+                np.ones(pts_per_side - 1, dtype=int) * (lat.shape[1] - 1),
+                idx_sides[1][-1:0:-1],
+            ])
+            return correct_polygon(Polygon(np.stack([lon[idx0, idx1], lat[idx0, idx1]], axis=-1)))
 
 
 @dataclass
 class Matchup:
+    """A Matchup represents a PACE file and a set of EarthCARE files which overlap this
+    granule.
+
+    Args:
+        filepath_pace: Path of downloaded PACE data.
+        matches_earthcare: A list of MatchEarthcare overlapping the PACE file.
+    """
     filepath_pace: Path
     matches_earthcare: list[MatchEarthcare]
 
     def save(self) -> None:
+        """Save this Matchup to file."""
         data_pace = netCDF4.Dataset(self.filepath_pace)
         pace_type = f"{data_pace.instrument}_{data_pace.processing_level}"
         stem_pace = self.filepath_pace.stem
-        pace_path = PATH_DATA / "matchups" / pace_type / stem_pace
+        path_pace = PATH_DATA / "matchups" / pace_type / stem_pace
         for match in self.matches_earthcare:
             namedata = parse_earthcare_filename(match.filepath_earthcare)
-            mdir = pace_path / namedata.get_file_type()
+            mdir = path_pace / namedata.get_file_type()
             mpath = mdir / match.filepath_earthcare.stem
             os.makedirs(mpath.parent, exist_ok=True)
             np.save(mpath, match.mask, allow_pickle=False)
+
+    def get_pace_bounds(self) -> Polygon | MultiPolygon:
+        """Get the polygon bounds for this Matchup's PACE data."""
+        data_pace = netCDF4.Dataset(self.filepath_pace)
+        poly_str = data_pace.geospatial_bounds.removeprefix("POLYGON").lstrip(" ").removeprefix("((").removesuffix("))")
+        return correct_polygon(Polygon([pt.split(" ") for pt in poly_str.split(", ")]))
 
 
 def get_meta_matchup_from_granule(
@@ -264,27 +321,48 @@ def get_matchup(
 def get_matchups(
     maap: MAAP,
     client_esa: Client,
+    long_term_token: str,
     shortname_pace: str,
     shortnames_earthcare: list[str],
     temporal: tuple[datetime, datetime],
-    long_term_token: str,
     time_offset: timedelta = timedelta(),
+    bbox: tuple[float, float, float, float] | None = None,
     limit: int = 20,
     verbose: bool = True,
     save: bool = True,
 ) -> list[Matchup]:
-    """TODO"""
+    """TODO
+    
+    Args:  TODO: more detail
+        maap: MAAP client to access NASA data (see maap-py package).
+        client_esa: pySTAC client to access ESA data.
+        long_term_token: A long term token to the ESA MAAP.
+        shortname_pace: PACE collection short name.
+        shortnames_earthcare: EarthCARE collection short names.
+        temporal: The time range in which to retrieve data.
+        time_offset: This offset will be subtracted from the start time and added to the
+            end time of the time range.
+        bbox: Lat/lon bounding box in W, S, E, N order by which to limit the search.
+        limit: Limit on how many files to download.
+        verbose: If true, print update messages.
+        save: Whether to save matchups to disk.
+
+    Returns:
+        matchups: List of retrieved matchups.
+    """
     assert shortname_pace in PACE_SHORTNAMES
     assert isinstance(shortnames_earthcare, list)
-    if not temporal[0].tzinfo:
-        temporal = (temporal[0].astimezone(UTC), temporal[1].astimezone(UTC))
     for shortname in shortnames_earthcare:
         assert shortname in EARTHCARE_SHORTNAMES
+    if not temporal[0].tzinfo:
+        temporal = (temporal[0].astimezone(UTC), temporal[1].astimezone(UTC))
+    bbox_str = ",".join([str(n) for n in bbox]) if bbox else None
     results_pace = filter_granules(
         maap.searchGranule(
             cmr_host=CMR_HOST,
             short_name=shortname_pace,
             temporal=get_datetime_range_maap(*temporal),
+            bounding_box=bbox_str,
             limit=20,
         )
     )

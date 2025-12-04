@@ -1,15 +1,25 @@
 [project]
+version = "0.1.0"
 name = "pace_earthcare_matchups"
-dynamic = ["version"]
 authors = [{ name = "Sean Foley", email = "sean.r.foley@nasa.gov" }]
 dependencies = [
     "cartopy",
     "h5py",
     "maap",
+    "matplotlib",
     "netCDF4",
+    "numpy",
+    "pystac",
     "pystac_client",
+    "seaborn",
     "shapely",
     "tqdm",
+]
+
+[project.optional-dependencies]
+# packages required for maintainers
+maintainer = [
+  "jupytext",
 ]
 
 [tool.pyright]
