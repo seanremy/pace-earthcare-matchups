@@ -3,7 +3,6 @@
 import numpy as np
 import numpy.typing as npt
 from shapely import (
-    Geometry,
     LineString,
     MultiLineString,
     MultiPolygon,

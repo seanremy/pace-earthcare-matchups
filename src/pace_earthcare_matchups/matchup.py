@@ -27,10 +27,6 @@ from pace_earthcare_matchups.earthcare import (
     parse_earthcare_filename,
 )
 from pace_earthcare_matchups.geospatial_utils import (
-    central_latlon_to_rot_mtx,
-    correct_linestring,
-    correct_polygon,
-    get_centered_latlon,
     get_centering_function,
 )
 from pace_earthcare_matchups.metadata_utils import (
@@ -121,7 +117,6 @@ def get_meta_matchup_from_granule(
             method="GET",
             filter=f"productType = '{shortname_ec}'",
         )
-        num_matched = results_esa.matched()
         items_ec += list(results_esa.items())
     if len(items_ec) > 0:
         # arrange by file type and start time, keep the newest baseline

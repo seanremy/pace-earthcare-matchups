@@ -7,8 +7,6 @@ from maap.Result import Granule
 import numpy as np
 from pystac.item import Item
 from shapely import (
-    Geometry,
-    GeometryCollection,
     LineString,
     MultiLineString,
     MultiPolygon,
