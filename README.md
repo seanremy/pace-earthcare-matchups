@@ -19,7 +19,7 @@ matchups = get_matchups(
 plot_matchups(matchups)
 ```
 
-![](assets/matchup_example.png)
+<img src="assets/matchup_example.png" alt="matchup_example" width="1000"/>
 
 Find the full code for this example [here](notebooks/tutorial.md).
 
