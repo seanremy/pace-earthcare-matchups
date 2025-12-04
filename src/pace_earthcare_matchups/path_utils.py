@@ -1,10 +1,10 @@
+import os
 from pathlib import Path
 
 from maap.Result import Granule
 from pystac.item import Item
 
-
-PATH_ROOT = (Path(__file__) / ".." / ".." / "..").resolve()
+PATH_ROOT = Path(os.getenv('PACE_ROOT_PATH', (Path(__file__) / ".." / ".." / "..").resolve()))
 PATH_DATA = (PATH_ROOT / "data").resolve()
 PATH_TOKEN = (PATH_ROOT / "token.txt").resolve()
 
