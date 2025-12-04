@@ -1,5 +1,19 @@
-**.pyc
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+
+# Distribution / packaging
+*.egg-info/
+
+# Jupyter notebooks and checkpoints
 **.ipynb
 **.ipynb_checkpoints
 
+# don't upload ESA token!!!
 token.txt
+# data directory
+data
+
+# IDE stuff
+.vscode
