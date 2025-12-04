@@ -106,4 +106,4 @@ def plot_matchups(
     ax.set_ylim(max(-90, minlat - 5), min(90, maxlat + 5))
     
     if fig_filepath:
-        plt.savefig(fig_filepath, dpi=100, bbox_inches="tight")
+        plt.savefig(fig_filepath, dpi=200, bbox_inches="tight")
