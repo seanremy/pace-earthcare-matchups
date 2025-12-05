@@ -46,7 +46,9 @@ pip install -e .  # editable install
 
 ### Data directory
 
-Either create a directory or symbolic link called `data`. All PACE and EarthCARE files will be downloaded to standard paths under this directory, so make sure you have enough storage space before you try and download dozens of matchups.
+There are two options for telling `pace-earthcare-matchups` where to store data. Option 1: create a directory or symbolic link called `data` under the root directory of the repo. Option 2: set the environment variable `PACE_EARTHCARE_DATA_PATH` to the desired location.
+
+All PACE and EarthCARE files will be downloaded to standard paths under this directory, so make sure you have enough storage space before you try and download dozens of matchups.
 
 ### ESA MAAP token
 
