@@ -1,6 +1,8 @@
 # pace-earthcare-matchups
 Search, filter, download, and intercompare [PACE](https://pace.gsfc.nasa.gov/) and [EarthCARE](https://earth.esa.int/eogateway/missions/earthcare) data, all with a few lines of Python. This repository contains utilities to simplify all stages of PACE / EarthCARE intercomparisons and improve reproducibility.
 
+This library leverages tools from the NASA [Multi-mission Algorithm and Analysis Platform (MAAP)](https://www.earthdata.nasa.gov/about/maap) for easy access to NASA Earth data and metadata.
+
 Here is a simple example, which searches for all PACE OCI L2 Cloud granules on a specific day, and finds the overlaps with two EarthCARE products. The filtering uses metadata to avoid unnecessary downloads. Only matching files are downloaded, and masks between matching products are computed and stored for later. The last step is to plot the results!
 
 ```
