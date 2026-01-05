@@ -17,3 +17,6 @@ data
 
 # IDE stuff
 .vscode
+
+# Mac
+**.DS_Store

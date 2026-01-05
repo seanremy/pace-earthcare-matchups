@@ -39,11 +39,18 @@ def polygon_from_granule(granule: Granule) -> Polygon | MultiPolygon:
     return correct_polygon(Polygon(coords))
 
 
-def geometry_from_item(item: Item) -> LineString:
+def geometry_from_item(item: Item) -> LineString | Polygon | MultiPolygon:
     """TODO"""
-    # currently assume linestring
+    #
     assert item.geometry
-    return LineString(item.geometry["coordinates"])
+    coords = np.array(item.geometry["coordinates"])
+    if item.geometry["type"] == "LineString":
+        return LineString(coords)
+    elif item.geometry["type"] == "Polygon":
+        assert coords.shape[0] == 1
+        return correct_polygon(Polygon(coords[0]))
+    else:
+        raise ValueError(f"Unrecognized geometry type: {item.geometry['type']}")
 
 
 def get_intersection_bbox(granule_pace: Granule, item_earthcare: Item) -> Polygon:
@@ -59,8 +66,12 @@ def get_intersection_bbox(granule_pace: Granule, item_earthcare: Item) -> Polygo
         lon, lat = np.concatenate(
             [np.array(g.exterior.coords.xy) for g in inter.geoms], axis=-1
         )
-    else:
+    elif isinstance(inter, LineString):
         lon, lat = np.array(inter.coords.xy)
+    elif isinstance(inter, Polygon):
+        lon, lat = np.array(inter.exterior.coords.xy)
+    else:
+        raise TypeError(f"Intersection cannot be of type {type(inter)}")
     return box(lon.min(), lat.min(), lon.max(), lat.max())
 
 
