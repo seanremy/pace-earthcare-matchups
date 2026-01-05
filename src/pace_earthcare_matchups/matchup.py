@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import os
 from pathlib import Path
+import re
 import warnings
 
 import h5py
@@ -158,13 +159,19 @@ class Matchup:
     def get_pace_bounds(self) -> Polygon | MultiPolygon:
         """Get the polygon bounds for this Matchup's PACE data."""
         data_pace = netCDF4.Dataset(self.filepath_pace)
-        poly_str = (
-            data_pace.geospatial_bounds.removeprefix("POLYGON")
-            .lstrip(" ")
-            .removeprefix("((")
-            .removesuffix("))")
-        )
-        return correct_polygon(Polygon([pt.split(" ") for pt in poly_str.split(", ")]))
+        if hasattr(data_pace, "geospatial_bounds"):
+            poly_str = (
+                data_pace.geospatial_bounds.removeprefix("POLYGON")
+                .lstrip(" ")
+                .removeprefix("((")
+                .removesuffix("))")
+            )
+            poly_arr = np.array(
+                [pt.split(" ") for pt in re.split(", *", poly_str)]
+            ).astype(float)
+            return correct_polygon(Polygon(poly_arr[..., ::-1]))
+        else:
+            raise NotImplementedError
 
 
 def get_meta_matchup_from_granule(
