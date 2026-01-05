@@ -94,8 +94,10 @@ class MatchEarthcare:
         lat, lon = lat_data[()], lon_data[()]
         if len(lat.shape) == 1:
             return correct_linestring(LineString(np.stack([lon, lat], axis=-1)))
-        else:
-            # take 
+        elif len(lat.shape) == 2:
+            # crop missing columns
+            missing = ((lat > 1e35) + (lon > 1e35)).any(axis=0)
+            lat, lon = lat[:, ~missing], lon[:, ~missing]
             idx_sides = [np.linspace(0, l - 1, pts_per_side).astype(int) for l in lat.shape]
             idx0 = np.concatenate([
                 idx_sides[0][:-1],
@@ -110,7 +112,8 @@ class MatchEarthcare:
                 idx_sides[1][-1:0:-1],
             ])
             return correct_polygon(Polygon(np.stack([lon[idx0, idx1], lat[idx0, idx1]], axis=-1)))
-
+        else:
+            raise ValueError(f"Expected lat/lon arrays to have 1 or 2 dimensions, got {len(lat.shape[0])}")
 
 @dataclass
 class Matchup:
