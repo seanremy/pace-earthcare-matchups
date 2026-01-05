@@ -41,7 +41,7 @@ def polygon_from_granule(granule: Granule) -> Polygon | MultiPolygon:
 
 def geometry_from_item(item: Item) -> LineString | Polygon | MultiPolygon:
     """TODO"""
-    # 
+    #
     assert item.geometry
     coords = np.array(item.geometry["coordinates"])
     if item.geometry["type"] == "LineString":

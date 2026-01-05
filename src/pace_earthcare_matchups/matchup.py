@@ -71,17 +71,20 @@ class MetaMatchup:
 @dataclass
 class MatchEarthcare:
     """A MatchEarthcare represents an EarthCARE file to which a PACE file was matched.
-    
+
     Args:
         filepath_earthcare: Path of downloaded EarthCARE data.
         mask: Mask into the data where it overlaps geospatially with PACE data.
     """
+
     filepath_earthcare: Path
     mask: npt.NDArray[np.bool]
 
-    def get_earthcare_bounds(self, pts_per_side: int = 20) -> LineString | MultiLineString | Polygon | MultiPolygon:
+    def get_earthcare_bounds(
+        self, pts_per_side: int = 20
+    ) -> LineString | MultiLineString | Polygon | MultiPolygon:
         """Get the linestring or polygon bounds for this MatchEarthcare's data.
-        
+
         Args:
             pts_per_side: Number of points per side in a polygon approximation of the
                 latitude/longitude bounds of 2D EarthCARE data.
@@ -98,22 +101,33 @@ class MatchEarthcare:
             # crop missing columns
             missing = ((lat > 1e35) + (lon > 1e35)).any(axis=0)
             lat, lon = lat[:, ~missing], lon[:, ~missing]
-            idx_sides = [np.linspace(0, l - 1, pts_per_side).astype(int) for l in lat.shape]
-            idx0 = np.concatenate([
-                idx_sides[0][:-1],
-                np.ones(pts_per_side - 1, dtype=int) * (lat.shape[0] - 1),
-                idx_sides[0][-1:0:-1],
-                np.zeros(pts_per_side - 1, dtype=int),
-            ])
-            idx1 = np.concatenate([
-                np.zeros(pts_per_side - 1, dtype=int),
-                idx_sides[1][:-1],
-                np.ones(pts_per_side - 1, dtype=int) * (lat.shape[1] - 1),
-                idx_sides[1][-1:0:-1],
-            ])
-            return correct_polygon(Polygon(np.stack([lon[idx0, idx1], lat[idx0, idx1]], axis=-1)))
+            idx_sides = [
+                np.linspace(0, idx - 1, pts_per_side).astype(int) for idx in lat.shape
+            ]
+            idx0 = np.concatenate(
+                [
+                    idx_sides[0][:-1],
+                    np.ones(pts_per_side - 1, dtype=int) * (lat.shape[0] - 1),
+                    idx_sides[0][-1:0:-1],
+                    np.zeros(pts_per_side - 1, dtype=int),
+                ]
+            )
+            idx1 = np.concatenate(
+                [
+                    np.zeros(pts_per_side - 1, dtype=int),
+                    idx_sides[1][:-1],
+                    np.ones(pts_per_side - 1, dtype=int) * (lat.shape[1] - 1),
+                    idx_sides[1][-1:0:-1],
+                ]
+            )
+            return correct_polygon(
+                Polygon(np.stack([lon[idx0, idx1], lat[idx0, idx1]], axis=-1))
+            )
         else:
-            raise ValueError(f"Expected lat/lon arrays to have 1 or 2 dimensions, got {len(lat.shape[0])}")
+            raise ValueError(
+                f"Expected lat/lon arrays to have 1 or 2 dimensions, got {len(lat.shape[0])}"
+            )
+
 
 @dataclass
 class Matchup:
@@ -124,6 +138,7 @@ class Matchup:
         filepath_pace: Path of downloaded PACE data.
         matches_earthcare: A list of MatchEarthcare overlapping the PACE file.
     """
+
     filepath_pace: Path
     matches_earthcare: list[MatchEarthcare]
 
@@ -143,7 +158,12 @@ class Matchup:
     def get_pace_bounds(self) -> Polygon | MultiPolygon:
         """Get the polygon bounds for this Matchup's PACE data."""
         data_pace = netCDF4.Dataset(self.filepath_pace)
-        poly_str = data_pace.geospatial_bounds.removeprefix("POLYGON").lstrip(" ").removeprefix("((").removesuffix("))")
+        poly_str = (
+            data_pace.geospatial_bounds.removeprefix("POLYGON")
+            .lstrip(" ")
+            .removeprefix("((")
+            .removesuffix("))")
+        )
         return correct_polygon(Polygon([pt.split(" ") for pt in poly_str.split(", ")]))
 
 
@@ -335,7 +355,7 @@ def get_matchups(
     save: bool = True,
 ) -> list[Matchup]:
     """TODO
-    
+
     Args:  TODO: more detail
         maap: MAAP client to access NASA data (see maap-py package).
         client_esa: pySTAC client to access ESA data.

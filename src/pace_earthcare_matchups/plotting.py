@@ -41,24 +41,29 @@ def plot_matchups(
     for matchup in matchups:
         labels_pace.add("_".join(matchup.filepath_pace.parts[-4:-1]))
         for match in matchup.matches_earthcare:
-            labels_earthcare.add(f"EarthCARE_{match.filepath_earthcare.parts[-2].split('_')[0]}")
-    palette = dict(zip(
-        list(labels_pace) + list(labels_earthcare),
-        sns.color_palette("colorblind", len(labels_pace) + len(labels_earthcare)),
-    ))
+            labels_earthcare.add(
+                f"EarthCARE_{match.filepath_earthcare.parts[-2].split('_')[0]}"
+            )
+    palette = dict(
+        zip(
+            list(labels_pace) + list(labels_earthcare),
+            sns.color_palette("colorblind", len(labels_pace) + len(labels_earthcare)),
+        )
+    )
     # keep track of min/max lat/lon for cropping the plot later
     minlat, maxlat = np.inf, -np.inf
     minlon, maxlon = np.inf, -np.inf
+
     def _update_extent(coords: npt.NDArray):
         nonlocal minlat, maxlat, minlon, maxlon
         minlat = min(minlat, np.min(coords[..., 1]))
         maxlat = max(maxlat, np.max(coords[..., 1]))
         minlon = min(minlon, np.min(coords[..., 0]))
         maxlon = max(maxlon, np.max(coords[..., 0]))
+
     # helper function for plotting the bounds of either PACE or EarthCARE data
     def _plot_bounds(
-        bounds: LineString | MultiLineString | Polygon | MultiPolygon,
-        label: str
+        bounds: LineString | MultiLineString | Polygon | MultiPolygon, label: str
     ) -> matplotlib.lines.Line2D | matplotlib.patches.Polygon:
         if isinstance(bounds, MultiLineString | MultiPolygon):
             geoms = bounds.geoms
@@ -88,9 +93,12 @@ def plot_matchups(
                     label=label,
                 )[0]
             else:
-                raise TypeError(f"Did not know how to handle geometry type: {type(geoms[0])}")
+                raise TypeError(
+                    f"Did not know how to handle geometry type: {type(geoms[0])}"
+                )
         assert plot_element
         return plot_element
+
     # loop, plotting matchups / matches, and track lines/polygons for the legend
     for matchup in matchups:
         bounds_pace = matchup.get_pace_bounds()
@@ -98,12 +106,16 @@ def plot_matchups(
         plot_elements[label_pace] = _plot_bounds(bounds_pace, label_pace)
         for match in matchup.matches_earthcare:
             bounds_earthcare = match.get_earthcare_bounds()
-            label_earthcare = f"EarthCARE_{match.filepath_earthcare.parts[-2].split('_')[0]}"
-            plot_elements[label_earthcare] = _plot_bounds(bounds_earthcare, label_earthcare)
-    ax.set_title(f"PACE / EarthCARE Matchups")
+            label_earthcare = (
+                f"EarthCARE_{match.filepath_earthcare.parts[-2].split('_')[0]}"
+            )
+            plot_elements[label_earthcare] = _plot_bounds(
+                bounds_earthcare, label_earthcare
+            )
+    ax.set_title("PACE / EarthCARE Matchups")
     ax.legend(handles=plot_elements.values())
     ax.set_xlim(max(-180, minlon - 5), min(180, maxlon + 5))
     ax.set_ylim(max(-90, minlat - 5), min(90, maxlat + 5))
-    
+
     if fig_filepath:
         plt.savefig(fig_filepath, dpi=200, bbox_inches="tight")
