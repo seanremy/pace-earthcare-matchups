@@ -1,3 +1,7 @@
+"""This module handles EarthCARE tokens, downloading EarthCARE data, and parsing
+filenames.
+"""
+
 from dataclasses import dataclass
 from datetime import datetime
 from dateutil import parser
@@ -10,7 +14,14 @@ from tqdm import tqdm
 
 
 def get_short_term_token(long_term_token: str) -> str:
-    """TODO"""
+    """Get a short-term ESA MAAP token using your long-term token.
+
+    Args:
+        long_term_token: Long-term ESA MAAP token.
+
+    Returns:
+        access_token: A short-term ESA MAAP token.
+    """
     response = requests.post(
         "https://iam.maap.eo.esa.int/realms/esa-maap/protocol/openid-connect/token",
         data={
@@ -29,7 +40,16 @@ def get_short_term_token(long_term_token: str) -> str:
 
 
 def download_earthcare_item(item: Item, long_term_token: str, datadir: Path) -> Path:
-    """TODO"""
+    """Download the EarthCARE file described by the provided STAC item.
+
+    Args:
+        item: STAC entry corresponding to an EarthCARE file.
+        long_term_token: Long-term ESA MAAP token.
+        datadir: Directory into which the EarthCARE file will be downloaded.
+
+    Returns:
+        path_outfile: Path to the downloaded EarthCARE file.
+    """
     url_h5 = item.assets["enclosure_h5"].href
     # This is extremely unfortunate, but AWS bucket name length limits require
     #   the truncation of ONE character off of the end of the standard
@@ -75,7 +95,7 @@ class EarthcareNameData:
     frame_id: str
 
     def get_file_type(self) -> str:
-        """TODO"""
+        """Get the 10-character file type code of this file."""
 
         def _pad(s: str, plen: int = 4) -> str:
             return s + "_" * max(0, plen - len(s))
@@ -84,8 +104,15 @@ class EarthcareNameData:
 
 
 def parse_earthcare_filename(filename: str | Path) -> EarthcareNameData:
-    """TODO
-    https://earthcarehandbook.earth.esa.int/article/product
+    """Parse an EarthCARE filename or filepath.
+    See: https://earthcarehandbook.earth.esa.int/article/product for more details on the
+    EarthCARE file naming conventions.
+
+    Args:
+        filename: Name of or path to an EarthCARE file.
+
+    Returns:
+        earthcare_namedata: Description of the EarthCARE file name.
     """
     stem = filename if isinstance(filename, str) else filename.stem
     stem = stem.removeprefix("ECA_")  # remove mission identifier if there

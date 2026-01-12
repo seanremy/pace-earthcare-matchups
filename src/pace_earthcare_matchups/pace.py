@@ -9,7 +9,15 @@ from pace_earthcare_matchups.metadata_utils import (
 
 
 def get_simultaneous_pace_product(granule: Granule, shortname_pace: str) -> Granule:
-    """TODO"""
+    """Using one PACE granule, get a different product with the same timestamp.
+
+    Args:
+        granule: A PACE granule's MAAP metadata.
+        shortname_pace: The shortname of a different PACE product to retrieve.
+
+    Returns:
+        result: MAAP metadata of a PACE granule co-occurring with the provided granule.
+    """
     maap = MAAP()
     dt_range = get_datetime_range_from_granule(granule)
     result = maap.searchGranule(

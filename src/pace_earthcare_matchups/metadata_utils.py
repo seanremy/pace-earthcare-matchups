@@ -1,4 +1,4 @@
-"""TODO"""
+"""Utilities for working with PACE and EarthCARE metadata."""
 
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -14,24 +14,22 @@ from shapely import (
 )
 from shapely.geometry import box
 
-from pace_earthcare_matchups.geospatial_utils import correct_polygon
+from pace_earthcare_matchups.geospatial_utils import correct_linestring, correct_polygon
 
 
 MAAP_DT_FMT = "%Y-%m-%dT%H:%M:%SZ"
 UTC = ZoneInfo("UTC")
 
 
-# # TODO: convert shapely geometry to geojson somewhere else
-# def geojson_from_granule(granule: Granule) -> dict:
-#     """TODO"""
-#     domain = granule['Granule']['Spatial']['HorizontalSpatialDomain']
-#     points = domain['Geometry']['GPolygon']['Boundary']['Point']
-#     coords = [[point['PointLongitude'], point['PointLatitude']] for point in points]
-#     return {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [coords]}}
-
-
 def polygon_from_granule(granule: Granule) -> Polygon | MultiPolygon:
-    """TODO"""
+    """Get a bounding polygon from a PACE granule (metadata).
+
+    Args:
+        granule_pace: A PACE granule's MAAP metadata.
+
+    Returns:
+        poly: A polygon or multipolygon of the granule's geospatial bounds.
+    """
     hsd = granule["Granule"]["Spatial"]["HorizontalSpatialDomain"]
     points = hsd["Geometry"]["GPolygon"]["Boundary"]["Point"]
     coords = [[point["PointLongitude"], point["PointLatitude"]] for point in points]
@@ -39,13 +37,23 @@ def polygon_from_granule(granule: Granule) -> Polygon | MultiPolygon:
     return correct_polygon(Polygon(coords))
 
 
-def geometry_from_item(item: Item) -> LineString | Polygon | MultiPolygon:
-    """TODO"""
+def geometry_from_item(
+    item: Item,
+) -> LineString | MultiLineString | Polygon | MultiPolygon:
+    """Get bounding geometry from an EarthCARE STAC item (metadata). EarthCARE bounds
+    may be either a linestring, polygon, or multipolygon.
+
+    Args:
+        item: STAC item describing an EarthCARE file.
+
+    Returns:
+        geom: The geospatial bounds of an EarthCARE file.
+    """
     #
     assert item.geometry
     coords = np.array(item.geometry["coordinates"])
     if item.geometry["type"] == "LineString":
-        return LineString(coords)
+        return correct_linestring(LineString(coords))
     elif item.geometry["type"] == "Polygon":
         assert coords.shape[0] == 1
         return correct_polygon(Polygon(coords[0]))
@@ -55,7 +63,13 @@ def geometry_from_item(item: Item) -> LineString | Polygon | MultiPolygon:
 
 def get_intersection_bbox(granule_pace: Granule, item_earthcare: Item) -> Polygon:
     """Get latlon bbox of PACE/EarthCARE metadata intersection.
-    TODO
+
+    Args:
+        granule_pace: A PACE granule's MAAP metadata.
+        item_earthcare: STAC item describing an EarthCARE file.
+
+    Returns:
+        bbox: The bounding box of the PACE / EarthCARE metadata intersection.
     """
     poly_pace = polygon_from_granule(granule_pace)
     geom_earthcare = geometry_from_item(item_earthcare)
@@ -77,9 +91,19 @@ def get_intersection_bbox(granule_pace: Granule, item_earthcare: Item) -> Polygo
 
 def get_datetime_range_from_granule(
     granule: Granule,
-    max_offset: timedelta = timedelta(),
+    padding: timedelta = timedelta(),
 ) -> tuple[datetime, datetime]:
-    """TODO"""
+    """Get the datetime range of a PACE granule.
+
+    Args:
+        granule: A PACE granule's MAAP metadata.
+        padding: Padding to apply to the start and end of the datetime range. Positive
+            padding expands the range, negative padding shrinks the range.
+
+    Returns:
+        dt_start: Starting datetime of the range.
+        dt_end: Ending datetime of the range.
+    """
     range_datetime = granule["Granule"]["Temporal"]["RangeDateTime"]
     dt_start = datetime.strptime(
         range_datetime["BeginningDateTime"],
@@ -89,14 +113,26 @@ def get_datetime_range_from_granule(
         range_datetime["EndingDateTime"],
         "%Y-%m-%dT%H:%M:%S.000Z",
     ).replace(tzinfo=UTC)
-    return dt_start - max_offset, dt_end + max_offset
+    if dt_start > dt_end:
+        raise ValueError("Start of datetime range must precede end of datetime range!")
+    if padding < timedelta() and (dt_end - dt_start) > (-2 * padding):
+        raise ValueError(
+            "Negative padding must be smaller than half of the datetime range!"
+        )
+    return dt_start - padding, dt_end + padding
 
 
 def filter_granules(
     granules: list, max_duration: timedelta = timedelta(hours=1)
 ) -> list:
     """Throw away granules with broken duration metadata.
-    TODO
+
+    Args:
+        granules: List of PACE granules' MAAP metadata.
+        max_duration: The maximum duration that granules are allowed to have.
+
+    Returns:
+        filtered: The list containing only the valid granules.
     """
     filtered = []
     for granule in granules:
@@ -107,5 +143,13 @@ def filter_granules(
 
 
 def get_datetime_range_maap(start: datetime, end: datetime) -> str:
-    """TODO"""
+    """Get a datetime range as a string in the NASA MAAP format.
+
+    Args:
+        start: Starting datetime of the range.
+        end: Ending datetime of the range.
+
+    Returns:
+        dt_str: Datetime range as a string.
+    """
     return ",".join([dt.astimezone(UTC).strftime(MAAP_DT_FMT) for dt in [start, end]])

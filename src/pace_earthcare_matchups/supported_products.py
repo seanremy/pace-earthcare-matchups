@@ -1,4 +1,7 @@
-"""TODO"""
+"""The list of products which will ultimately be supported.
+
+TODO: actually check that all of these products are supported!!!
+"""
 
 PACE_SHORTNAMES = [
     # Level 1
@@ -73,6 +76,8 @@ EARTHCARE_SHORTNAMES = [
     "MSI_COP_2A",
 ]
 
+# Note: PACE-PAX products are not yet supported!
+# TODO
 PACEPAX_SHORTNAMES = [
     "PACE-PAX_AircraftRemoteSensing_ER2_AirHARP2-MAP_Data",
     "PACE-PAX_AircraftRemoteSensing_ER2_HSRL2_Data",

@@ -10,7 +10,18 @@ PATH_TOKEN = (PATH_ROOT / "token.txt").resolve()
 
 
 def get_path(obj: Granule | Item) -> Path:
-    """TODO"""
+    """Get the local path of a serializable object. Serializable objects have uniform
+    specifications defined here for their paths, up to a root folder. The root folder
+    defaults to "{repo_root}/data", or can be configured with the environment variable
+    "PACE_EARTHCARE_DATA_PATH".
+
+    Args:
+        obj: An object of a type that has a specification for paths, currently only
+            Granule and Item.
+
+    Returns:
+        path: Local path of the object.
+    """
     if isinstance(obj, Granule):
         plat = obj["Granule"]["Platforms"]["Platform"]
         instrument = plat["Instruments"]["Instrument"]["ShortName"]
@@ -27,3 +38,5 @@ def get_path(obj: Granule | Item) -> Path:
         #   "ECA_" prefix off of EarthCARE files.
         filename = title.removeprefix("ECA_")
         return PATH_DATA / "EarthCARE" / product_type / filename
+    else:
+        raise TypeError(f"No path specification for objects of type {type(obj)}!")

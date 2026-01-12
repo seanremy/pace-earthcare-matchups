@@ -1,4 +1,10 @@
-"""TODO"""
+"""This module handles metadata matchups and matchups between PACE and EarthCARE. Note
+the difference between a "metadata matchup" and a "matchup". Metadata matchups use only
+the metadata descriptors stored in the metadata repositories (NASA CMR and ESA STAC).
+Matchups use the data arrays in the files themselves, which is more accurate, but
+requires the files to be downloaded locally. A two-stage approach of performing metadata
+comparisons first vastly reduces the number of files which must be locally downloaded.
+"""
 
 from collections import defaultdict
 from dataclasses import dataclass
@@ -55,7 +61,13 @@ CMR_HOST = "cmr.earthdata.nasa.gov"
 
 @dataclass
 class MetaMatchEarthcare:
-    """TODO"""
+    """Represents the metadata of an EarthCARE file matched to a PACE file's metadata.
+
+    Args:
+        item: STAC item describing an EarthCARE file.
+        bbox: Bounding box where the EarthCARE bounding geometry intersects the parent
+            PACE granule's bounding geometry.
+    """
 
     item: Item
     bbox: Polygon
@@ -63,7 +75,12 @@ class MetaMatchEarthcare:
 
 @dataclass
 class MetaMatchup:
-    """TODO"""
+    """Represents a metadata match between a PACE and EarthCARE file.
+
+    Args:
+        granule_pace: A PACE granule's MAAP metadata.
+        matches_earthcare: List of EarthCARE metadata matched to the PACE granule.
+    """
 
     granule_pace: Granule
     matches_earthcare: list[MetaMatchEarthcare]
@@ -71,7 +88,7 @@ class MetaMatchup:
 
 @dataclass
 class MatchEarthcare:
-    """A MatchEarthcare represents an EarthCARE file to which a PACE file was matched.
+    """Represents an EarthCARE file to which a PACE file was matched.
 
     Args:
         filepath_earthcare: Path of downloaded EarthCARE data.
@@ -132,8 +149,7 @@ class MatchEarthcare:
 
 @dataclass
 class Matchup:
-    """A Matchup represents a PACE file and a set of EarthCARE files which overlap this
-    granule.
+    """Represents a PACE file and a set of EarthCARE files which overlap with it.
 
     Args:
         filepath_pace: Path of downloaded PACE data.
@@ -180,7 +196,19 @@ def get_meta_matchup_from_granule(
     shortnames_earthcare: list[str],
     time_offset: timedelta = timedelta(seconds=5),
 ) -> MetaMatchup | None:
-    """TODO"""
+    """Get a metadata matchup from the provided PACE granule.
+
+    Args:
+        client_esa: pySTAC client to access ESA data.
+        granule_pace: A PACE granule's MAAP metadata.
+        shortnames_earthcare: List of EarthCARE collection short names.
+        time_offset: This offset will be subtracted from the start time and added to the
+            end time of the time range.
+
+    Returns:
+        meta_matchup: A metadata matchup with EarthCARE metadata overlapping the
+            provided PACE granule.
+    """
     assert isinstance(shortnames_earthcare, list)
 
     try:
@@ -230,8 +258,21 @@ def get_matchup_mask(
     lat_ec: npt.NDArray[np.float32],
     lon_ec: npt.NDArray[np.float32],
 ) -> npt.NDArray[np.bool]:
-    """TODO: document and break into smaller functions
-    TODO: handle 2D EarthCARE products with a mask
+    """Get the mask of the overlap between PACE and EarthCARE lat/lon arrays. The mask
+    is in the shape of the provided PACE data. PACE data is expected to be a 2D array.
+
+    TODO: account for multi-angle L1B lat/lon arrays.
+    TODO: break into smaller functions.
+
+    Args:
+        lat_pace: PACE latitude array.
+        lon_pace: PACE longitude array.
+        lat_ec: EarthCARE latitude array.
+        lon_ec: EarthCARE longitude array.
+
+    Returns:
+        ec_in_granule: Mask into the PACE data where it overlaps with the provided
+            EarthCARE data.
     """
     num_pts_per_edge = 10
     # TODO: account for dimensions of different products
@@ -281,7 +322,7 @@ def get_matchup_mask(
         * (lon_rot_ec <= lon_max_poly)
     )
 
-    # get mask of where the EarthCARE track is in the PACE granule
+    # get mask of where the EarthCARE points are in the PACE granule
     ec_in_granule = np.zeros_like(lat_ec, dtype=bool)
     pace_contains = np.vectorize(
         lambda p: pace_poly.contains(Point(p)), signature="(n)->()"
@@ -301,8 +342,17 @@ def get_matchup_mask(
 def get_matchup(
     meta_matchup: MetaMatchup,
     long_term_token: str,
-):
-    """TODO"""
+) -> Matchup:
+    """Get a matchup from a metadata matchup. Downloads the associated EarthCARE and
+    PACE data, then get the mask describing their overlap.
+
+    Args:
+        meta_matchup: A metadata matchup.
+        long_term_token: A long term token to the ESA MAAP.
+
+    Returns:
+        matchup: The matchup derived from the provided metadata matchup.
+    """
     paths_earthcare = []
     for meta_match in meta_matchup.matches_earthcare:
         path_earthcare = get_path(meta_match.item)
@@ -361,9 +411,15 @@ def get_matchups(
     verbose: bool = True,
     save: bool = True,
 ) -> list[Matchup]:
-    """TODO
+    """Get a list of matchups using provided search arguments.
 
-    Args:  TODO: more detail
+    This function searches for PACE data matching the provided filters in batches,
+    incrementing the start time of the search window so as to search through the entire
+    range in batches. For each item in a batch of PACE results, this function finds
+    and downloads matching EarthCARE data, computes the mask of overlaps, and optionally
+    saves the matchup data to disk.
+
+    Args:
         maap: MAAP client to access NASA data (see maap-py package).
         client_esa: pySTAC client to access ESA data.
         long_term_token: A long term token to the ESA MAAP.
