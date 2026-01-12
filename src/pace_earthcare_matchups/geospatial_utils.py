@@ -1,4 +1,9 @@
-"""TODO"""
+"""Set of utilities for geospatial operations. For a reference on coordinate frames, see
+'PACE OCI Calibration and Geolocation Operational Algorithm Description,' Fred Patt
+https://pace.oceansciences.org/docs/PACE_Vol_13_all_combined.pdf
+"""
+
+from collections.abc import Callable
 
 import numpy as np
 import numpy.typing as npt
@@ -19,11 +24,15 @@ WGS_84_F = (WGS_84_A - WGS_84_B) / WGS_84_A  # flattening
 
 
 def vincenty_distance(
-    latlon1: npt.NDArray[np.float64],
-    latlon2: npt.NDArray[np.float64],
+    latlon1: npt.NDArray[np.float32 | np.float64],
+    latlon2: npt.NDArray[np.float32 | np.float64],
     tol: float = 1e-12,
     max_iters: int = 10,
-) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+) -> tuple[
+    npt.NDArray[np.float32 | np.float64],
+    npt.NDArray[np.float32 | np.float64],
+    npt.NDArray[np.float32 | np.float64],
+]:
     """Compute geodesic distance using Vincenty's formulae and the WGS-84 ellipsoid.
 
     See: https://en.wikipedia.org/wiki/Vincenty%27s_formulae#Inverse_problem
@@ -126,14 +135,15 @@ def vincenty_distance(
 
 
 def vincenty_point_along_geodesic(
-    latlon1: npt.NDArray[np.float64],
-    alpha1: npt.NDArray[np.float64],
-    s: npt.NDArray[np.float64],
+    latlon1: npt.NDArray[np.float32 | np.float64],
+    alpha1: npt.NDArray[np.float32 | np.float64],
+    s: npt.NDArray[np.float32 | np.float64],
     tol: float = 1e-6,
     max_iters: int = 10,
 ) -> tuple[
-    tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]] | npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
+    tuple[npt.NDArray[np.float32 | np.float64], npt.NDArray[np.float32 | np.float64]]
+    | npt.NDArray[np.float32 | np.float64],
+    npt.NDArray[np.float32 | np.float64],
 ]:
     """Compute destination locations along geodesics defined by starting locations,
     azimuth angles, and distances.
@@ -141,21 +151,17 @@ def vincenty_point_along_geodesic(
     See: https://en.wikipedia.org/wiki/Vincenty%27s_formulae#Direct_problem
 
     Args:
-        latlon1: Starting points' latitudes and longitudes as a numpy array of
-            shape (2, N).
-        alpha1: Forward azimuths at initial points as a numpy array of shape
-            (N,).
-        s: Distances to travel along the geodesics as a numpy array of shape
-            (N,).
+        latlon1: Starting points' latitudes and longitudes as a numpy array of shape
+            (2, N).
+        alpha1: Forward azimuths at initial points as a numpy array of shape (N,).
+        s: Distances to travel along the geodesics as a numpy array of shape (N,).
         tol: Tolerance in meters. When the updates are less than tol, the
             iteration ends (default: 1e-12).
         max_iters: Maximum number of iterations to perform.
 
     Returns:
-        latlon2: Estimated latitude and longitude as a numpy array of shape
-            (2, N).
-        alpha2: Forward azimuths at destination points as a numpy array of
-            shape(N,).
+        latlon2: Estimated latitude and longitude as a numpy array of shape (2, N).
+        alpha2: Forward azimuths at destination points as a numpy array of shape(N,).
     """
     assert isinstance(latlon1, np.ndarray) and latlon1.dtype == np.float64
     assert isinstance(alpha1, np.ndarray) and alpha1.dtype == np.float64
@@ -249,8 +255,27 @@ def vincenty_point_along_geodesic(
     return latlon2, alpha2
 
 
-def get_antemeridian_intersection(latlon1, latlon2, tol=1e-6, max_iters=1000):
-    """TODO"""
+def get_antimeridian_intersection(
+    latlon1: npt.NDArray[np.float32 | np.float64],
+    latlon2: npt.NDArray[np.float32 | np.float64],
+    tol: float = 1e-6,
+    max_iters: int = 1000,
+) -> npt.NDArray[np.float32 | np.float64]:
+    """Get the intersection between the great circle defined by two endpoints and the
+    antimeridian (dateline) using Vincenty's formulae.
+
+    Args:
+        latlon1: Starting points' latitudes and longitudes as a numpy array of
+            shape (2, N).
+        latlon2: Destination points' latitudes and longitudes as a numpy array
+            of shape (2, N).
+        tol: Tolerance in meters. When the updates are less than tol, the
+            iteration ends (default: 1e-12).
+        max_iters: Maximum number of iterations to perform.
+
+    Returns:
+        lat_am: Latitude of the great circle's intersection with the antimeridian.
+    """
     dists, alpha1, _ = vincenty_distance(latlon1, latlon2)
 
     lon_sign = np.sign(latlon1[1])
@@ -273,23 +298,32 @@ def get_antemeridian_intersection(latlon1, latlon2, tol=1e-6, max_iters=1000):
 
 
 def correct_polygon(poly: Polygon) -> Polygon | MultiPolygon:
-    """TODO"""
+    """Correct a geospatial polygon. If it contains the North xor the South pole, add
+    vertices to minimally affect the polygon's area while avoiding intersection with the
+    antimeridian (dateline). Otherwise, if it crosses the antimeridian without including
+    a pole, split it into two polygons, one on each side of the antimeridian.
+
+    Args:
+        poly: A polygon in (longitude, latitude) order.
+
+    Returns:
+        poly_correct: Corrected polygon / multipolygon.
+    """
     lonlat = np.array(poly.exterior.coords.xy)
     lon_jumps = np.where(np.abs(np.diff(lonlat[0])) > 180)[0]
     # if we have 0 jumps, check this polygon is valid, then return it
     if lon_jumps.shape[0] == 0:
         if not poly.is_valid:
             raise ValueError(
-                "This polygon appears to be malformed for reasons unrelated to the antemeridian."
+                "This polygon appears to be malformed for reasons unrelated to the antimeridian."
             )
         return poly
     # if we have 1 jump, this granule includes a pole
     if lon_jumps.shape[0] == 1:
-        # TODO
         latlon1 = lonlat[:, lon_jumps][::-1]
         latlon2 = lonlat[:, lon_jumps + 1][::-1]
-        lat_am = get_antemeridian_intersection(latlon1, latlon2)
-        # add a point at the antemeridian and a ring of points near the pole
+        lat_am = get_antimeridian_intersection(latlon1, latlon2)
+        # add a point at the antimeridian and a ring of points near the pole
         lon_ring = -np.arange(-180, 181, 60) * np.sign(lonlat[0, lon_jumps[0]])
         polar_lat = np.repeat(np.sign(lat_am) * 89.999, lon_ring.shape[0])
         lonlat_pole = np.concatenate(
@@ -311,8 +345,8 @@ def correct_polygon(poly: Polygon) -> Polygon | MultiPolygon:
     elif lon_jumps.shape[0] == 2:
         latlon1 = lonlat[:, lon_jumps][::-1]
         latlon2 = lonlat[:, lon_jumps + 1][::-1]
-        lat_am = get_antemeridian_intersection(latlon1, latlon2)
-        # split into two polygons at the antemeridian
+        lat_am = get_antimeridian_intersection(latlon1, latlon2)
+        # split into two polygons at the antimeridian
         lonlat_split1 = np.concatenate(
             [
                 lonlat[:, : lon_jumps[0] + 1],
@@ -349,15 +383,23 @@ def correct_polygon(poly: Polygon) -> Polygon | MultiPolygon:
 
 
 def correct_linestring(line: LineString) -> LineString | MultiLineString:
-    """TODO"""
+    """Correct a geospatial line string. If it crosses the antimeridian (dateline),
+    split it into two line strings, one on either side.
+
+    Args:
+        line: A line string in (longitude, latitude) order.
+
+    Returns:
+        line_correct: Corrected line string / multi-line string.
+    """
     lonlat = np.array(line.coords.xy)
     lon_jumps = np.where(np.abs(np.diff(lonlat[0])) > 180)[0]
     if lon_jumps.shape[0] == 0:
         return line
-    # add points at the antemeridian
+    # add points at the antimeridian
     latlon1 = lonlat[:, lon_jumps][::-1]
     latlon2 = lonlat[:, lon_jumps + 1][::-1]
-    lat_am = get_antemeridian_intersection(latlon1, latlon2)
+    lat_am = get_antimeridian_intersection(latlon1, latlon2)
 
     lonlat_split1 = np.stack([np.sign(latlon1[1]) * 180, lat_am], axis=1)
     lonlat_split2 = np.stack([np.sign(latlon2[1]) * 180, lat_am], axis=1)
@@ -371,20 +413,44 @@ def correct_linestring(line: LineString) -> LineString | MultiLineString:
     return MultiLineString([LineString(c) for c in coords])
 
 
-def get_centered_latlon(lat, lon):
-    """TODO"""
-    cross_180 = (np.nanmax(lon) - np.nanmin(lon)) > 180
-    if cross_180:
-        central_lon = np.nanmean((lon + 180) / 360) - 180
+def get_centered_latlon(
+    lat: npt.NDArray[np.float32 | np.float64],
+    lon: npt.NDArray[np.float32 | np.float64],
+) -> tuple[float, float]:
+    """Get latitude and longitude arrays centered so that the mean longitude is 0.
+    To resolve ambiguity arising from the circularity of longitude, this function
+    assumes the maximum range of longitudes when properly centered is less than 180.
+
+    Args:
+        lat: Latitude array.
+        lon: Longitude array.
+
+    Returns:
+        central_lat: Centered latitudes.
+        central_lon: Centered longitudes.
+    """
+    crosses_180 = (np.nanmax(lon) - np.nanmin(lon)) > 180
+    if crosses_180:
+        central_lon = (np.nanmean((lon + 180) / 360) - 180).item()
     else:
-        central_lon = np.nanmean(lon)
-    central_lat = np.nanmean(lat)
+        central_lon = np.nanmean(lon).item()
+    central_lat = np.nanmean(lat).item()
     return central_lat, central_lon
 
 
-def central_latlon_to_rot_mtx(central_lat, central_lon):
-    """Get a rotation matrix from spherical ECEF to center on the specified
-    latitude and longitude. TODO: type hints
+def central_latlon_to_rot_mtx(
+    central_lat: float,
+    central_lon: float,
+) -> npt.NDArray[np.float64]:
+    """Get a rotation matrix from Earth-centered rotating to center on the specified
+    latitude and longitude.
+
+    Args:
+        central_lat: Centered latitude, in degrees.
+        central_lon: Centered longitude, in degrees.
+
+    Returns:
+        rot_mtx: Rotation matrix.
     """
     theta = -central_lon * np.pi / 180
     rot_mtx_z = np.array(
@@ -405,12 +471,31 @@ def central_latlon_to_rot_mtx(central_lat, central_lon):
     return rot_mtx_y @ rot_mtx_z
 
 
-def get_centering_function(lat, lon):
-    """TODO"""
+def get_centering_function(
+    lat: npt.NDArray[np.float32 | np.float64],
+    lon: npt.NDArray[np.float32 | np.float64],
+) -> Callable:
+    """Get a function that rotates subsequent lat/lon arrays to the central lat/lon of
+    the provided lat/lon arrays.
+
+    Args:
+        lat: Latitude array, in degrees.
+        lon: Longitude array, in degrees.
+
+    Returns:
+        centering_function: Function that rotates lat/lon arrays to center on the
+            provided lat/lon array.
+    """
     central_lat, central_lon = get_centered_latlon(lat, lon)
     rot_mtx = central_latlon_to_rot_mtx(central_lat, central_lon)[None]
 
-    def centering_function(lat, lon):
+    def centering_function(
+        lat: npt.NDArray[np.float32 | np.float64],
+        lon: npt.NDArray[np.float32 | np.float64],
+    ) -> tuple[
+        npt.NDArray[np.float32 | np.float64],
+        npt.NDArray[np.float32 | np.float64],
+    ]:
         cos_lat = np.cos(np.radians(lat))
         cos_lon = np.cos(np.radians(lon))
         sin_lat = np.sin(np.radians(lat))

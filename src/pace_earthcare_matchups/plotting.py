@@ -1,4 +1,4 @@
-"""TODO"""
+"""Utilities for plotting matchups."""
 
 from pathlib import Path
 
@@ -26,7 +26,13 @@ def plot_matchups(
     figsize: tuple[int, int] | None = None,
     fig_filepath: Path | str | None = None,
 ) -> None:
-    """TODO"""
+    """Plot a list of matchups and optionally save the figure to file.
+
+    Args:
+        matchups: List of matchups to be plotted.
+        figsize: Size of the matplotlib figure as an (x, y) tuple.
+        fig_filepath: If provided, saves the figure to this path. Should end in ".png".
+    """
     if isinstance(fig_filepath, str):
         fig_filepath = Path(fig_filepath)
     ax = plt.figure(figsize=figsize).add_subplot(projection=ccrs.PlateCarree())
