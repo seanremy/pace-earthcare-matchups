@@ -56,11 +56,6 @@ matchups = get_matchups(
 ```
 
 ```{code-cell} ipython3
-data_pace = netCDF4.Dataset(matchups[3].filepath_pace)
-data_pace["navigation_data/latitude"][:].max()
-```
-
-```{code-cell} ipython3
 for matchup in matchups:
     print(matchup.filepath_pace)
     for match_earthcare in matchup.matches_earthcare:
