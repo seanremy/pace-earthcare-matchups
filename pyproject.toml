@@ -4,7 +4,9 @@ name = "pace_earthcare_matchups"
 authors = [{ name = "Sean Foley", email = "sean.r.foley@nasa.gov" }]
 dependencies = [
     "cartopy",
+    "earthaccess",
     "h5py",
+    "jupyter",
     "maap",
     "matplotlib",
     "netCDF4",

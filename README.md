@@ -6,10 +6,8 @@ This library leverages tools from the NASA [Multi-mission Algorithm and Analysis
 Here is a simple example, which searches for all PACE OCI L2 Cloud granules on a specific day, and finds the overlaps with two EarthCARE products. The filtering uses metadata to avoid unnecessary downloads. Only matching files are downloaded, and masks between matching products are computed and stored for later. The last step is to plot the results!
 
 ```
-maap = MAAP()  # NASA MAAP client
 client_esa = Client.open(ESA_CATALOGUE)  # ESA STAC client
 matchups = get_matchups(
-    maap=maap,
     client_esa=client_esa,
     long_term_token=_ESA_MAAP_TOKEN,
     shortname_pace="PACE_OCI_L2_CLOUD",
@@ -42,7 +40,7 @@ cd pace-earthcare-matchups
 
 Then, installation is simple:
 ```
-pip install .     # regular install
+pip install .     # regular install, OR ...
 pip install -e .  # editable install
 ```
 
@@ -51,6 +49,17 @@ pip install -e .  # editable install
 There are two options for telling `pace-earthcare-matchups` where to store data. Option 1: create a directory or symbolic link called `data` under the root directory of the repo. Option 2: set the environment variable `PACE_EARTHCARE_DATA_PATH` to the desired location.
 
 All PACE and EarthCARE files will be downloaded to standard paths under this directory, so make sure you have enough storage space before you try and download dozens of matchups.
+
+### Access NASA Data
+
+NASA data is available through the CMR. This repository offers two different options for how to interface with the CMR:
+1. `maap-py`: You may use this option if you are working on the NASA MAAP or if you are working from a NASA computer.
+2. `earthaccess`: Otherwise, use earthaccess. You will need a (free) [Earthdata account](https://urs.earthdata.nasa.gov/). To avoid having to manually enter your credentials every time, use one of the alternate options described in the [earthaccess docs](https://earthaccess.readthedocs.io/en/stable/user_guide/authenticate/), such as `.netrc`.
+
+`pace_earthcare_matchups` uses `maap-py` by default. To use `earthaccess` instead, set the following environment variable:
+```
+set PACE_EARTHCARE_MATCHUPS_USE_EARTHACCESS=1
+```
 
 ### ESA MAAP token
 
