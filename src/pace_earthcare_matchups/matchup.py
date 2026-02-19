@@ -393,7 +393,7 @@ def get_matchups(
     shortnames_earthcare: list[str],
     temporal: tuple[datetime, datetime],
     time_offset: timedelta = timedelta(),
-    bbox: tuple[float, float, float, float] | None = None,
+    bbox: tuple[float, float, float, float] = (-180, -90, 180, 90),
     limit: int = 10,
     search_batch_size: int = 20,
     verbose: bool = True,

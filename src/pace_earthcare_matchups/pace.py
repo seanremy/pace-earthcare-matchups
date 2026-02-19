@@ -117,11 +117,12 @@ def _query_cmr(
     temporal: tuple[datetime, datetime],
     bbox: tuple[float, float, float, float] | None,
     limit: int,
+    bbox: tuple[float, float, float, float] = (-180, -90, 180, 90),
 ):
     """TODO remove underscore, document"""
     use_earthaccess = bool(os.getenv("PACE_EARTHCARE_MATCHUPS_USE_EARTHACCESS"))
     if not use_earthaccess:
-        bbox_str = ",".join([str(n) for n in bbox]) if bbox else None
+        bbox_str = ",".join([str(n) for n in bbox])
         results_pace = MAAP().searchGranule(
             cmr_host=CMR_HOST,
             short_name=short_name,
@@ -161,7 +162,6 @@ def get_simultaneous_pace_product(granule: Granule, shortname_pace: str) -> Gran
     result = _query_cmr(
         short_name=shortname_pace,
         temporal=(granule.beginning_datetime, granule.ending_datetime),
-        bbox=None,
         limit=1,
     )[0]
     time_diff = (
