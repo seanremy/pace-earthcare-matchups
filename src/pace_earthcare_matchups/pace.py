@@ -115,7 +115,6 @@ class Granule:
 def _query_cmr(
     short_name: str,
     temporal: tuple[datetime, datetime],
-    bbox: tuple[float, float, float, float] | None,
     limit: int,
     bbox: tuple[float, float, float, float] = (-180, -90, 180, 90),
 ):
@@ -129,10 +128,8 @@ def _query_cmr(
             temporal=",".join(
                 [
                     temporal[0]
-                    .astimezone(ZoneInfo("UTC"))
                     .strftime("%Y-%m-%dT%H:%M:%SZ"),
                     temporal[1]
-                    .astimezone(ZoneInfo("UTC"))
                     .strftime("%Y-%m-%dT%H:%M:%SZ"),
                 ]
             ),

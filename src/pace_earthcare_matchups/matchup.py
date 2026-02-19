@@ -412,7 +412,7 @@ def get_matchups(
         long_term_token: A long term token to the ESA MAAP.
         shortname_pace: PACE collection short name.
         shortnames_earthcare: EarthCARE collection short names.
-        temporal: The time range in which to retrieve data.
+        temporal: The time range in which to retrieve data. Times are assumed to be UTC.
         time_offset: This offset will be subtracted from the start time and added to the
             end time of the time range.
         bbox: Lat/lon bounding box in W, S, E, N order by which to limit the search.
@@ -428,11 +428,11 @@ def get_matchups(
     assert isinstance(shortnames_earthcare, list)
     for shortname in shortnames_earthcare:
         assert shortname in EARTHCARE_SHORTNAMES
-    if not temporal[0].tzinfo:
-        temporal = (
-            temporal[0].astimezone(ZoneInfo("UTC")),
-            temporal[1].astimezone(ZoneInfo("UTC")),
-        )
+
+    temporal = (
+        temporal[0].replace(tzinfo=ZoneInfo("UTC")),
+        temporal[1].replace(tzinfo=ZoneInfo("UTC")),
+    )
     results_pace = _query_cmr(
         short_name=shortname_pace,
         temporal=temporal,
