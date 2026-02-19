@@ -312,18 +312,19 @@ def get_matchup_mask(
 
     # get mask of where the EarthCARE points are in the PACE granule
     ec_in_granule = np.zeros_like(lat_ec, dtype=bool)
-    pace_contains = np.vectorize(
-        lambda p: pace_poly.contains(Point(p)), signature="(n)->()"
-    )
-    ec_in_granule[latlon_rot_bbox_mask] = pace_contains(
-        np.stack(
-            [
-                lon_rot_ec[latlon_rot_bbox_mask],
-                lat_rot_ec[latlon_rot_bbox_mask],
-            ],
-            axis=-1,
+    if latlon_rot_bbox_mask.any():
+        pace_contains = np.vectorize(
+            lambda p: pace_poly.contains(Point(p)), signature="(n)->()"
         )
-    )
+        ec_in_granule[latlon_rot_bbox_mask] = pace_contains(
+            np.stack(
+                [
+                    lon_rot_ec[latlon_rot_bbox_mask],
+                    lat_rot_ec[latlon_rot_bbox_mask],
+                ],
+                axis=-1,
+            )
+        )
     return ec_in_granule
 
 
