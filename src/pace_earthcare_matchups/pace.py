@@ -56,7 +56,7 @@ class Granule:
                 warnings.warn(f"Broken geospatial bounds in {filename}")
                 self.geospatial_bounds = poly
             # download function
-            self._download = lambda: result.getData(str(self.filepath))
+            self._download = lambda: result.getData(str(self.filepath.parent))
         elif isinstance(result, DataGranule):
             earthaccess.login(persist=True)
             # short name
