@@ -12,11 +12,9 @@ from datetime import datetime, timedelta
 import os
 from pathlib import Path
 import re
-import warnings
+from zoneinfo import ZoneInfo
 
 import h5py
-from maap.maap import MAAP
-from maap.Result import Granule
 import netCDF4
 import numpy as np
 import numpy.typing as npt
@@ -42,21 +40,15 @@ from pace_earthcare_matchups.geospatial_utils import (
     get_centering_function,
 )
 from pace_earthcare_matchups.metadata_utils import (
-    UTC,
-    filter_granules,
     get_datetime_range_from_granule,
-    get_datetime_range_maap,
     get_intersection_bbox,
-    polygon_from_granule,
 )
+from pace_earthcare_matchups.pace import Granule, _query_cmr
 from pace_earthcare_matchups.path_utils import PATH_DATA, get_path
 from pace_earthcare_matchups.supported_products import (
     EARTHCARE_SHORTNAMES,
     PACE_SHORTNAMES,
 )
-
-
-CMR_HOST = "cmr.earthdata.nasa.gov"
 
 
 @dataclass
@@ -185,7 +177,10 @@ class Matchup:
             poly_arr = np.array(
                 [pt.split(" ") for pt in re.split(", *", poly_str)]
             ).astype(float)
-            return correct_polygon(Polygon(poly_arr[..., ::-1]))
+            # currently, L1 / L2 geospatial bounds are in different lat/lon orders
+            if data_pace.processing_level.startswith("L1"):
+                poly_arr = poly_arr[..., ::-1]
+            return correct_polygon(Polygon(poly_arr))
         else:
             raise NotImplementedError
 
@@ -200,7 +195,7 @@ def get_meta_matchup_from_granule(
 
     Args:
         client_esa: pySTAC client to access ESA data.
-        granule_pace: A PACE granule's MAAP metadata.
+        granule_pace: A PACE granule's metadata.
         shortnames_earthcare: List of EarthCARE collection short names.
         time_offset: This offset will be subtracted from the start time and added to the
             end time of the time range.
@@ -211,13 +206,6 @@ def get_meta_matchup_from_granule(
     """
     assert isinstance(shortnames_earthcare, list)
 
-    try:
-        pace_poly = polygon_from_granule(granule_pace)
-    except ValueError:
-        warnings.warn(
-            f"Broken geospatial bounds in {granule_pace['Granule']['DataGranule']['ProducerGranuleId']}"
-        )
-        return
     dt_range_offset = get_datetime_range_from_granule(granule_pace, time_offset)
     # check for granules with broken timestamps
     if dt_range_offset[1] - dt_range_offset[0] > timedelta(days=1):
@@ -227,7 +215,7 @@ def get_meta_matchup_from_granule(
         results_esa = client_esa.search(
             collections=["EarthCAREL1Validated_MAAP", "EarthCAREL2Validated_MAAP"],
             datetime=dt_range_offset,
-            intersects=to_geojson(pace_poly),
+            intersects=to_geojson(granule_pace.geospatial_bounds),
             method="GET",
             filter=f"productType = '{shortname_ec}'",
         )
@@ -324,18 +312,19 @@ def get_matchup_mask(
 
     # get mask of where the EarthCARE points are in the PACE granule
     ec_in_granule = np.zeros_like(lat_ec, dtype=bool)
-    pace_contains = np.vectorize(
-        lambda p: pace_poly.contains(Point(p)), signature="(n)->()"
-    )
-    ec_in_granule[latlon_rot_bbox_mask] = pace_contains(
-        np.stack(
-            [
-                lon_rot_ec[latlon_rot_bbox_mask],
-                lat_rot_ec[latlon_rot_bbox_mask],
-            ],
-            axis=-1,
+    if latlon_rot_bbox_mask.any():
+        pace_contains = np.vectorize(
+            lambda p: pace_poly.contains(Point(p)), signature="(n)->()"
         )
-    )
+        ec_in_granule[latlon_rot_bbox_mask] = pace_contains(
+            np.stack(
+                [
+                    lon_rot_ec[latlon_rot_bbox_mask],
+                    lat_rot_ec[latlon_rot_bbox_mask],
+                ],
+                axis=-1,
+            )
+        )
     return ec_in_granule
 
 
@@ -366,7 +355,7 @@ def get_matchup(
     path_pace = get_path(meta_matchup.granule_pace)
     if not path_pace.exists():
         os.makedirs(path_pace.parent, exist_ok=True)
-        meta_matchup.granule_pace.getData(str(path_pace.parent))
+        meta_matchup.granule_pace.download()
     data_pace = netCDF4.Dataset(path_pace)
     if "geolocation_data" in data_pace.groups:
         lat_pace = data_pace["geolocation_data/latitude"][:].filled(fill_value=np.nan)
@@ -399,15 +388,15 @@ def get_matchup(
 
 
 def get_matchups(
-    maap: MAAP,
     client_esa: Client,
     long_term_token: str,
     shortname_pace: str,
     shortnames_earthcare: list[str],
     temporal: tuple[datetime, datetime],
     time_offset: timedelta = timedelta(),
-    bbox: tuple[float, float, float, float] | None = None,
-    limit: int = 20,
+    bbox: tuple[float, float, float, float] = (-180, -90, 180, 90),
+    limit: int = 10,
+    search_batch_size: int = 20,
     verbose: bool = True,
     save: bool = True,
 ) -> list[Matchup]:
@@ -420,16 +409,16 @@ def get_matchups(
     saves the matchup data to disk.
 
     Args:
-        maap: MAAP client to access NASA data (see maap-py package).
         client_esa: pySTAC client to access ESA data.
         long_term_token: A long term token to the ESA MAAP.
         shortname_pace: PACE collection short name.
         shortnames_earthcare: EarthCARE collection short names.
-        temporal: The time range in which to retrieve data.
+        temporal: The time range in which to retrieve data. Times are assumed to be UTC.
         time_offset: This offset will be subtracted from the start time and added to the
             end time of the time range.
         bbox: Lat/lon bounding box in W, S, E, N order by which to limit the search.
-        limit: Limit on how many files to download.
+        limit: Limit on how many matchups to download.
+        search_batch_size: How many PACE files to get per batch.
         verbose: If true, print update messages.
         save: Whether to save matchups to disk.
 
@@ -440,18 +429,18 @@ def get_matchups(
     assert isinstance(shortnames_earthcare, list)
     for shortname in shortnames_earthcare:
         assert shortname in EARTHCARE_SHORTNAMES
-    if not temporal[0].tzinfo:
-        temporal = (temporal[0].astimezone(UTC), temporal[1].astimezone(UTC))
-    bbox_str = ",".join([str(n) for n in bbox]) if bbox else None
-    results_pace = filter_granules(
-        maap.searchGranule(
-            cmr_host=CMR_HOST,
-            short_name=shortname_pace,
-            temporal=get_datetime_range_maap(*temporal),
-            bounding_box=bbox_str,
-            limit=20,
-        )
+
+    temporal = (
+        temporal[0].replace(tzinfo=ZoneInfo("UTC")),
+        temporal[1].replace(tzinfo=ZoneInfo("UTC")),
     )
+    results_pace = _query_cmr(
+        short_name=shortname_pace,
+        temporal=temporal,
+        bbox=bbox,
+        limit=search_batch_size,
+    )
+
     time_start = temporal[0]
     matches = []
     while len(results_pace) > 0:
@@ -481,13 +470,11 @@ def get_matchups(
             break
         if time_start >= temporal[1]:
             break
-        results_pace = filter_granules(
-            maap.searchGranule(
-                cmr_host=CMR_HOST,
-                short_name=shortname_pace,
-                temporal=get_datetime_range_maap(time_start, temporal[1]),
-                limit=20,
-            )
+        results_pace = _query_cmr(
+            short_name=shortname_pace,
+            temporal=(time_start, temporal[1]),
+            bbox=bbox,
+            limit=search_batch_size,
         )
     if verbose:
         print(f"Found {len(matches)} total matches!")

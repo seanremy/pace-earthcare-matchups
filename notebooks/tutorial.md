@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.18.1
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -17,9 +17,8 @@ kernelspec:
 ```
 
 ```{code-cell} ipython3
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from maap.maap import MAAP
 from pystac_client import Client
 
 from pace_earthcare_matchups.matchup import get_matchups
@@ -34,17 +33,14 @@ TIME_END = datetime(year=2025, month=9, day=2, hour=0, minute=0, second=0)
 # Keep southern hemisphere, non-polar overlaps only
 BBOX = (-180, -50, 180, 0)  # W, S, E, N order
 
-CMR_HOST = "cmr.earthdata.nasa.gov"
 _ESA_MAAP_TOKEN = open(PATH_TOKEN).read()
 ESA_CATALOGUE = "https://catalog.maap.eo.esa.int/catalogue/"
 
-maap = MAAP()
 client_esa = Client.open(ESA_CATALOGUE)
 ```
 
 ```{code-cell} ipython3
 matchups = get_matchups(
-    maap=maap,
     client_esa=client_esa,
     long_term_token=_ESA_MAAP_TOKEN,
     shortname_pace="PACE_OCI_L2_CLOUD",
@@ -63,7 +59,6 @@ for matchup in matchups:
 ```
 
 ```{code-cell} ipython3
-# plot_matchups(matchups)
 plot_matchups(matchups, fig_filepath="../assets/matchup_example.png")
 ```
 

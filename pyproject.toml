@@ -4,7 +4,9 @@ name = "pace_earthcare_matchups"
 authors = [{ name = "Sean Foley", email = "sean.r.foley@nasa.gov" }]
 dependencies = [
     "cartopy",
+    "earthaccess",
     "h5py",
+    "jupyter",
     "maap",
     "matplotlib",
     "netCDF4",
@@ -26,7 +28,12 @@ maintainer = [
 typeCheckingMode = "standard"
 include = ["src"]
 ignore = []
-exclude = ["data"]
+exclude = [
+  "data",
+  "**/node_modules",
+  "**/__pycache__",
+  "**/.*",
+]
 
 [tool.ruff]
 exclude = [
