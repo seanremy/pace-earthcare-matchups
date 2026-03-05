@@ -149,6 +149,7 @@ class Matchup:
     """
 
     filepath_pace: Path
+    shortname_pace: str
     matches_earthcare: list[MatchEarthcare]
 
     def save(self) -> None:
@@ -384,7 +385,11 @@ def get_matchup(
                 mask=match_mask,
             )
         )
-    return Matchup(filepath_pace=path_pace, matches_earthcare=matches)
+    return Matchup(
+        filepath_pace=path_pace,
+        shortname_pace=meta_matchup.granule_pace.short_name,
+        matches_earthcare=matches,
+    )
 
 
 def get_matchups(
