@@ -127,10 +127,8 @@ def _query_cmr(
             short_name=short_name,
             temporal=",".join(
                 [
-                    temporal[0]
-                    .strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    temporal[1]
-                    .strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    temporal[0].strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    temporal[1].strftime("%Y-%m-%dT%H:%M:%SZ"),
                 ]
             ),
             bounding_box=bbox_str,
