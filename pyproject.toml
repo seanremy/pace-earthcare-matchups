@@ -28,7 +28,12 @@ maintainer = [
 typeCheckingMode = "standard"
 include = ["src"]
 ignore = []
-exclude = ["data"]
+exclude = [
+  "data",
+  "**/node_modules",
+  "**/__pycache__",
+  "**/.*",
+]
 
 [tool.ruff]
 exclude = [
