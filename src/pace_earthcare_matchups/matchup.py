@@ -176,10 +176,21 @@ class Matchup:
                 .removesuffix("))")
             )
             poly_arr = np.array(
-                [pt.split(" ") for pt in re.split(", *", poly_str)]
+                [pt.rstrip(" ").split(" ")[::-1] for pt in re.split(", *", poly_str)]
             ).astype(float)
-            # currently, L1 / L2 geospatial bounds are in different lat/lon orders
-            if data_pace.processing_level.startswith("L1"):
+            reorder_latlon_l2 = (
+                data_pace.processing_version <= "3.1"
+                and self.shortname_pace
+                in [
+                    "PACE_OCI_L2_AOP",
+                    "PACE_OCI_L2_BGC",
+                    "PACE_OCI_L2_IOP",
+                    "PACE_OCI_L2_LANDVI",
+                    "PACE_OCI_L2_PAR",
+                    "PACE_OCI_L2_SFREFL",
+                ]
+            )
+            if reorder_latlon_l2:
                 poly_arr = poly_arr[..., ::-1]
             return correct_polygon(Polygon(poly_arr))
         else:
@@ -375,7 +386,6 @@ def get_matchup(
         lon_earthcare = data_earthcare["ScienceData/longitude"]
         assert isinstance(lat_earthcare, h5py.Dataset)
         assert isinstance(lon_earthcare, h5py.Dataset)
-        # start_idx, end_idx = get_matchup_start_end_idx(lat_pace, lon_pace, lat_earthcare, lon_earthcare)
         match_mask = get_matchup_mask(
             lat_pace, lon_pace, lat_earthcare[()], lon_earthcare[()]
         )
