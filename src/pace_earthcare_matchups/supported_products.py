@@ -5,17 +5,17 @@ TODO: actually check that all of these products are supported!!!
 
 PACE_SHORTNAMES = [
     # Level 1
-    "PACE_HARP2_L1B_SCI",
+    # "PACE_HARP2_L1B_SCI",  # not yet supported TODO
     "PACE_HARP2_L1C_SCI",
     "PACE_OCI_L1B_SCI",
     "PACE_OCI_L1C_SCI",
-    "PACE_SPEXONE_L1B_SCI",
+    # "PACE_SPEXONE_L1B_SCI",  # not yet supported TODO
     "PACE_SPEXONE_L1C_SCI",
     # Level 2
     "PACE_HARP2_L2_CLOUD_GPC",
     "PACE_HARP2_L2_CLOUD_GPC_NRT",
-    "PACE_HARP2_L2_MAPOL_OCEAN",
-    "PACE_HARP2_L2_MAPOL_OCEAN_NRT",
+    # "PACE_HARP2_L2_MAPOL_OCEAN",  # not yet supported (no geospatial bounds) TODO
+    # "PACE_HARP2_L2_MAPOL_OCEAN_NRT",
     "PACE_OCI_L2_AER_UAA",
     "PACE_OCI_L2_AER_UAA_NRT",
     "PACE_OCI_L2_AOP",
@@ -23,9 +23,9 @@ PACE_SHORTNAMES = [
     "PACE_OCI_L2_BGC",
     "PACE_OCI_L2_BGC_NRT",
     "PACE_OCI_L2_CLOUD",
+    "PACE_OCI_L2_CLOUD_NRT",
     "PACE_OCI_L2_CLOUD_MASK",
     "PACE_OCI_L2_CLOUD_MASK_NRT",
-    "PACE_OCI_L2_CLOUD_NRT",
     "PACE_OCI_L2_IOP",
     "PACE_OCI_L2_IOP_NRT",
     "PACE_OCI_L2_LANDVI",
@@ -38,10 +38,10 @@ PACE_SHORTNAMES = [
     "PACE_OCI_L2_UVAI_UAA_NRT",
     "PACE_SPEXONE_L2_AER_RTAPLAND",
     "PACE_SPEXONE_L2_AER_RTAPLAND_NRT",
-    "PACE_SPEXONE_L2_AER_RTAPOCEAN",
-    "PACE_SPEXONE_L2_AER_RTAPOCEAN_NRT",
-    "PACE_SPEXONE_L2_MAPOL_OCEAN",
-    "PACE_SPEXONE_L2_MAPOL_OCEAN_NRT",
+    # "PACE_SPEXONE_L2_AER_RTAPOCEAN",  # not yet supported (no geospatial bounds) TODO
+    # "PACE_SPEXONE_L2_AER_RTAPOCEAN_NRT",
+    # "PACE_SPEXONE_L2_MAPOL_OCEAN",  # not yet supported (no geospatial bounds) TODO
+    # "PACE_SPEXONE_L2_MAPOL_OCEAN_NRT",
 ]
 
 EARTHCARE_SHORTNAMES = [
@@ -75,21 +75,21 @@ EARTHCARE_SHORTNAMES = [
     "MSI_COP_2A",
 ]
 
-# Note: PACE-PAX products are not yet supported!
+# PACE-PAX products are not yet supported
 # TODO
-PACEPAX_SHORTNAMES = [
-    "PACE-PAX_AircraftRemoteSensing_ER2_AirHARP2-MAP_Data",
-    "PACE-PAX_AircraftRemoteSensing_ER2_HSRL2_Data",
-    "PACE-PAX_AircraftRemoteSensing_ER2_PRISM-PICARD-L1C_Data",
-    "PACE-PAX_AircraftRemoteSensing_ER2_RSP_Data",
-    "PACE-PAX_AircraftRemoteSensing_ER2_SPEXAIRBORNE_Data",
-    "PACE-PAX_Analysis_CIRPAS-TO_Data",
-    "PACE-PAX_Analysis_ER2_Data",
-    "PACE-PAX_Analysis_ISARA_Data",
-    "PACE-PAX_CIRPAS-Facility_AircraftInSitu_CIRPAS-TO_Data",
-    "PACE-PAX_Ivanpah-Playa_Data",
-    "PACE-PAX_LARGE-Aerosol_AircraftInSitu_CIRPAS-TO_Data",
-    "PACE-PAX_LARGE-Aerosol_Marina-Tower_Data",
-    "PACE-PAX_LiNeph_AircraftInSitu_CIRPAS-TO_Data",
-    "PACE-PAX_MetNav_AircraftInSitu_ER2_Data",
-]
+# PACEPAX_SHORTNAMES = [
+#     "PACE-PAX_AircraftRemoteSensing_ER2_AirHARP2-MAP_Data",
+#     "PACE-PAX_AircraftRemoteSensing_ER2_HSRL2_Data",
+#     "PACE-PAX_AircraftRemoteSensing_ER2_PRISM-PICARD-L1C_Data",
+#     "PACE-PAX_AircraftRemoteSensing_ER2_RSP_Data",
+#     "PACE-PAX_AircraftRemoteSensing_ER2_SPEXAIRBORNE_Data",
+#     "PACE-PAX_Analysis_CIRPAS-TO_Data",
+#     "PACE-PAX_Analysis_ER2_Data",
+#     "PACE-PAX_Analysis_ISARA_Data",
+#     "PACE-PAX_CIRPAS-Facility_AircraftInSitu_CIRPAS-TO_Data",
+#     "PACE-PAX_Ivanpah-Playa_Data",
+#     "PACE-PAX_LARGE-Aerosol_AircraftInSitu_CIRPAS-TO_Data",
+#     "PACE-PAX_LARGE-Aerosol_Marina-Tower_Data",
+#     "PACE-PAX_LiNeph_AircraftInSitu_CIRPAS-TO_Data",
+#     "PACE-PAX_MetNav_AircraftInSitu_ER2_Data",
+# ]

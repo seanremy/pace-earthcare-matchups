@@ -45,7 +45,7 @@ def plot_matchups(
     labels_pace = set()
     labels_earthcare = set()
     for matchup in matchups:
-        labels_pace.add("_".join(matchup.filepath_pace.parts[-4:-1]))
+        labels_pace.add(matchup.shortname_pace)
         for match in matchup.matches_earthcare:
             labels_earthcare.add(
                 f"EarthCARE_{match.filepath_earthcare.parts[-2].split('_')[0]}"
@@ -108,8 +108,9 @@ def plot_matchups(
     # loop, plotting matchups / matches, and track lines/polygons for the legend
     for matchup in matchups:
         bounds_pace = matchup.get_pace_bounds()
-        label_pace = "_".join(matchup.filepath_pace.parts[-4:-1])
-        plot_elements[label_pace] = _plot_bounds(bounds_pace, label_pace)
+        plot_elements[matchup.shortname_pace] = _plot_bounds(
+            bounds_pace, matchup.shortname_pace
+        )
         for match in matchup.matches_earthcare:
             bounds_earthcare = match.get_earthcare_bounds()
             label_earthcare = (
