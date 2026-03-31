@@ -515,3 +515,8 @@ def get_centering_function(
         return lat_rot, lon_rot
 
     return centering_function
+
+
+def get_outer_ring(arr: npt.NDArray) -> npt.NDArray:
+    """Get the outer ring in the first two dimensions of an array."""
+    return np.concatenate([arr[0], arr[:, -1], arr[-1][::-1], arr[:, 0][::-1]])

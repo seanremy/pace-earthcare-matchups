@@ -5,7 +5,7 @@ TODO: actually check that all of these products are supported!!!
 
 PACE_SHORTNAMES = [
     # Level 1
-    # "PACE_HARP2_L1B_SCI",  # not yet supported TODO
+    "PACE_HARP2_L1B_SCI",
     "PACE_HARP2_L1C_SCI",
     "PACE_OCI_L1B_SCI",
     "PACE_OCI_L1C_SCI",
