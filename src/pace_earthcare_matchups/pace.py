@@ -6,6 +6,7 @@ import earthaccess
 from earthaccess.results import DataGranule
 from maap.Result import Granule as MAAPGranule
 from maap.maap import MAAP
+import netCDF4
 import numpy as np
 import os
 from shapely import MultiPolygon, Polygon
@@ -165,3 +166,17 @@ def get_simultaneous_pace_product(granule: Granule, shortname_pace: str) -> Gran
     )
     assert time_diff[0].total_seconds() < 10 and time_diff[1].total_seconds() < 10
     return result
+
+
+def get_nadir_idx_harp2_l1b(data_pace: netCDF4.Dataset) -> int:
+    """Get the index of the smallest absolute viewing angle in HARP2 L1B data.
+
+    Args:
+        data_pace: A HARP2 L1B data file.
+
+    Returns:
+        idx_nadir: Index of the smallest absolute viewing angle.
+    """
+    view_angle = data_pace["sensor_views_bands/sensor_view_angle"]
+    idx_nadir = np.argmin(np.abs(view_angle))
+    return int(idx_nadir.item())

@@ -38,12 +38,13 @@ from pace_earthcare_matchups.geospatial_utils import (
     correct_linestring,
     correct_polygon,
     get_centering_function,
+    get_outer_ring,
 )
 from pace_earthcare_matchups.metadata_utils import (
     get_datetime_range_from_granule,
     get_intersection_bbox,
 )
-from pace_earthcare_matchups.pace import Granule, _query_cmr
+from pace_earthcare_matchups.pace import Granule, _query_cmr, get_nadir_idx_harp2_l1b
 from pace_earthcare_matchups.path_utils import PATH_DATA, get_path
 from pace_earthcare_matchups.supported_products import (
     EARTHCARE_SHORTNAMES,
@@ -193,6 +194,16 @@ class Matchup:
             if reorder_latlon_l2:
                 poly_arr = poly_arr[..., ::-1]
             return correct_polygon(Polygon(poly_arr))
+        elif self.shortname_pace == "PACE_HARP2_L1B_SCI":
+            idx_nadir = get_nadir_idx_harp2_l1b(data_pace)
+            lat = data_pace["geolocation_data/latitude"][idx_nadir].filled(
+                fill_value=np.nan
+            )
+            lon = data_pace["geolocation_data/longitude"][idx_nadir].filled(
+                fill_value=np.nan
+            )
+            latlon_ring = get_outer_ring(np.stack([lon, lat], axis=-1))
+            return correct_polygon(Polygon(latlon_ring))
         else:
             raise NotImplementedError
 
@@ -386,9 +397,22 @@ def get_matchup(
         lon_earthcare = data_earthcare["ScienceData/longitude"]
         assert isinstance(lat_earthcare, h5py.Dataset)
         assert isinstance(lon_earthcare, h5py.Dataset)
-        match_mask = get_matchup_mask(
-            lat_pace, lon_pace, lat_earthcare[()], lon_earthcare[()]
-        )
+        if meta_matchup.granule_pace.short_name == "PACE_HARP2_L1B_SCI":
+            # in the case of HARP2 L1B, use the nadir view angle's geolocation as bounds
+            idx_nadir = get_nadir_idx_harp2_l1b(data_pace)
+            match_mask = get_matchup_mask(
+                lat_pace[idx_nadir],
+                lon_pace[idx_nadir],
+                lat_earthcare[()],
+                lon_earthcare[()],
+            )
+        else:
+            match_mask = get_matchup_mask(
+                lat_pace,
+                lon_pace,
+                lat_earthcare[()],
+                lon_earthcare[()],
+            )
         matches.append(
             MatchEarthcare(
                 filepath_earthcare=path_earthcare,
