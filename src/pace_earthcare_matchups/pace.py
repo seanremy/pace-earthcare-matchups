@@ -1,4 +1,11 @@
-from datetime import datetime
+"""This module handles querying the NASA CMR for PACE data, downloading granules, and
+parsing filenames.
+"""
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from dateutil import parser
+from pathlib import Path
 import warnings
 from zoneinfo import ZoneInfo
 
@@ -110,6 +117,7 @@ class Granule:
 
     def download(self):
         if not self.filepath.exists():
+            os.makedirs(self.filepath.parent, exist_ok=True)
             self._download()
 
 
@@ -118,9 +126,9 @@ def _query_cmr(
     temporal: tuple[datetime, datetime],
     limit: int,
     bbox: tuple[float, float, float, float] = (-180, -90, 180, 90),
-):
+) -> list[Granule]:
     """TODO remove underscore, document"""
-    use_earthaccess = bool(os.getenv("PACE_EARTHCARE_MATCHUPS_USE_EARTHACCESS"))
+    use_earthaccess = bool(int(os.getenv("PACE_EARTHCARE_MATCHUPS_USE_EARTHACCESS", "0")))
     if not use_earthaccess:
         bbox_str = ",".join([str(n) for n in bbox])
         results_pace = MAAP().searchGranule(
@@ -180,3 +188,72 @@ def get_nadir_idx_harp2_l1b(data_pace: netCDF4.Dataset) -> int:
     view_angle = data_pace["sensor_views_bands/sensor_view_angle"]
     idx_nadir = np.argmin(np.abs(view_angle))
     return int(idx_nadir.item())
+
+
+def get_pace_shortname(instrument: str, level: str) -> str:
+    """TODO"""
+    shortname_pace = f"PACE_{instrument}_{level}"
+    if level[1] == "1":
+        shortname_pace += "_SCI"
+    return shortname_pace
+    
+
+@dataclass
+class PaceNameData:
+    instrument: str
+    start_time: datetime
+    level: str
+    product: str | None
+    version: str | None
+
+
+def parse_pace_filename(filename: str | Path) -> PaceNameData:
+    """Parse a PACE filename or filepath.
+
+    Args:
+        filename: Name of or path to a PACE file.
+
+    Returns:
+        pace_namedata: Description of the PACE file name.
+    """
+    stem = filename if isinstance(filename, str) else filename.stem
+    stem_list = [s for s in stem.split(".") if s != ""]
+    instrument = stem_list[0].split("_")[1]
+    start_time = parser.parse(f"{stem_list[1]}Z")  # Z to enforce UTC
+    level = stem_list[2]
+    assert level in ["L1B", "L1C", "L2"]
+    product, version = None, None
+    for s in stem_list[3:]:
+        if s.startswith("V") and s[1:].replace("_", "").isnumeric():
+            if isinstance(version, str):
+                raise ValueError(f"Got conflicting values {version} and {s} for version!")
+            version = s
+        else:
+            if isinstance(product, str):
+                raise ValueError(f"Got conflicting values {product} and {s} for product!")
+            product = s
+    return PaceNameData(
+        instrument,
+        start_time,
+        level,
+        product,
+        version,
+    )
+
+
+def download_missing_pace_data(filepath: Path) -> None:
+    pace_namedata = parse_pace_filename(filepath)
+    shortname = get_pace_shortname(pace_namedata.instrument, pace_namedata.level)
+    time_window=(
+        pace_namedata.start_time + timedelta(seconds=1),
+        pace_namedata.start_time + timedelta(seconds=2),
+    )
+    
+    results = _query_cmr(
+        short_name=shortname,
+        temporal=time_window,
+        limit=1,
+    )
+    assert len(results) == 1
+    assert results[0].filepath.name == filepath.name
+    results[0].download()
