@@ -3,14 +3,17 @@ filenames.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import parser
 import os
 from pathlib import Path
 import requests
 
+from pystac.client import Client
 from pystac.item import Item
-from tqdm import tqdm
+from tqdm.notebook import tqdm
+
+from pace_earthcare_matchups.path_utils import get_path
 
 
 def get_short_term_token(long_term_token: str) -> str:
@@ -139,4 +142,34 @@ def parse_earthcare_filename(filename: str | Path) -> EarthcareNameData:
         val_end,
         orbit_no,
         frame_id,
+    )
+
+
+def download_missing_earthcare_data(
+    filepath: Path,
+    long_term_token: str,
+    client_esa: Client,
+) -> None:
+    ec_namedata = parse_earthcare_filename(filepath)
+    
+    time_window = (
+        ec_namedata.val_start + timedelta(seconds=1),
+        ec_namedata.val_start + timedelta(seconds=2),
+    )
+    shortname = ec_namedata.category + "_" * (4 - len(ec_namedata.category))
+    shortname += ec_namedata.product + "_" * (4 - len(ec_namedata.product))
+    shortname += ec_namedata.level
+    results = client_esa.search(
+        collections=["EarthCAREL1Validated_MAAP", "EarthCAREL2Validated_MAAP"],
+        datetime=time_window,
+        method="GET",
+        filter=f"productType = '{shortname}'",
+    )
+    items = list(results.items())
+    assert len(items) == 1
+    assert filepath.stem == items[0].id.removeprefix("ECA_")
+    download_earthcare_item(
+        item=items[0],
+        long_term_token=long_term_token,
+        datadir=get_path(items[0]).parent,
     )

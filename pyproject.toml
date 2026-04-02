@@ -7,7 +7,7 @@ dependencies = [
     "earthaccess",
     "h5py",
     "jupyter",
-    "maap",
+    "maap-py",
     "matplotlib",
     "netCDF4",
     "numpy",

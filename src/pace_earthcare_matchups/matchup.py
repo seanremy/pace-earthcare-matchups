@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 import os
 from pathlib import Path
 import re
+import shutil
+from typing import Callable
 from zoneinfo import ZoneInfo
 
 import h5py
@@ -28,10 +30,11 @@ from shapely import (
     Polygon,
     to_geojson,
 )
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 
 from pace_earthcare_matchups.earthcare import (
     download_earthcare_item,
+    download_missing_earthcare_data,
     parse_earthcare_filename,
 )
 from pace_earthcare_matchups.geospatial_utils import (
@@ -44,7 +47,13 @@ from pace_earthcare_matchups.metadata_utils import (
     get_datetime_range_from_granule,
     get_intersection_bbox,
 )
-from pace_earthcare_matchups.pace import Granule, _query_cmr, get_nadir_idx_harp2_l1b
+from pace_earthcare_matchups.pace import (
+    Granule,
+    _query_cmr,
+    download_missing_pace_data,
+    get_nadir_idx_harp2_l1b,
+    get_pace_shortname,
+)
 from pace_earthcare_matchups.path_utils import PATH_DATA, get_path
 from pace_earthcare_matchups.supported_products import (
     EARTHCARE_SHORTNAMES,
@@ -354,7 +363,7 @@ def get_matchup_mask(
 def get_matchup(
     meta_matchup: MetaMatchup,
     long_term_token: str,
-) -> Matchup:
+) -> tuple[Matchup, list[Path]]:
     """Get a matchup from a metadata matchup. Downloads the associated EarthCARE and
     PACE data, then get the mask describing their overlap.
 
@@ -364,7 +373,9 @@ def get_matchup(
 
     Returns:
         matchup: The matchup derived from the provided metadata matchup.
+        TODO
     """
+    paths_added = []
     paths_earthcare = []
     for meta_match in meta_matchup.matches_earthcare:
         path_earthcare = get_path(meta_match.item)
@@ -372,13 +383,15 @@ def get_matchup(
             download_earthcare_item(
                 item=meta_match.item,
                 long_term_token=long_term_token,
-                datadir=get_path(meta_match.item).parent,
+                datadir=path_earthcare.parent,
             )
+            paths_added.append(path_earthcare)
         paths_earthcare.append(path_earthcare)
     path_pace = get_path(meta_matchup.granule_pace)
     if not path_pace.exists():
         os.makedirs(path_pace.parent, exist_ok=True)
         meta_matchup.granule_pace.download()
+        paths_added.append(path_pace)
     data_pace = netCDF4.Dataset(path_pace)
     if "geolocation_data" in data_pace.groups:
         lat_pace = data_pace["geolocation_data/latitude"][:].filled(fill_value=np.nan)
@@ -423,7 +436,7 @@ def get_matchup(
         filepath_pace=path_pace,
         shortname_pace=meta_matchup.granule_pace.short_name,
         matches_earthcare=matches,
-    )
+    ), paths_added
 
 
 def get_matchups(
@@ -438,6 +451,7 @@ def get_matchups(
     search_batch_size: int = 20,
     verbose: bool = True,
     save: bool = True,
+    filter_fn: Callable | None = None,
 ) -> list[Matchup]:
     """Get a list of matchups using provided search arguments.
 
@@ -460,6 +474,8 @@ def get_matchups(
         search_batch_size: How many PACE files to get per batch.
         verbose: If true, print update messages.
         save: Whether to save matchups to disk.
+        filter_fn: A callable function which operates on a single matchup, returning
+            True if the matchup is to be kept, False otherwise.
 
     Returns:
         matchups: List of retrieved matchups.
@@ -484,10 +500,14 @@ def get_matchups(
     matches = []
     while len(results_pace) > 0:
         if verbose:
-            print(
-                f"{len(matches)} matches so far, searching {len(results_pace)} {shortname_pace} results"
-            )
-        pbar = tqdm(results_pace) if verbose else results_pace
+            t_start_str = datetime.strftime(results_pace[0].beginning_datetime, "%Y-%m-%d|%H:%M:%S")
+            t_end_str = datetime.strftime(results_pace[-1].ending_datetime, "%Y-%m-%d|%H:%M:%S")
+            print(f"{len(matches)}/{limit} matches so far.")
+            print(f"Batch of {len(results_pace)} new {shortname_pace} results found "
+                  f"from {t_start_str} -> {t_end_str}.")
+            pbar = tqdm(results_pace, desc=f"Searching batch")
+        else:
+            pbar = results_pace
         for result_pace in pbar:
             dt_range = get_datetime_range_from_granule(result_pace)
             assert dt_range[1] > dt_range[0]
@@ -498,12 +518,16 @@ def get_matchups(
                 time_offset=time_offset,
             )
             if meta_match:
-                match = get_matchup(meta_match, long_term_token)
-                if save:
-                    match.save()
-                matches.append(match)
-                if len(matches) >= limit:
-                    break
+                match, paths_added = get_matchup(meta_match, long_term_token)
+                if filter_fn is None or filter_fn(match):
+                    if save:
+                        match.save()
+                    matches.append(match)
+                    if len(matches) >= limit:
+                        break
+                else:
+                    for path in paths_added:
+                        os.remove(path)
             time_start = max(time_start, dt_range[1] + timedelta(seconds=1))
         if len(matches) >= limit:
             break
@@ -518,3 +542,77 @@ def get_matchups(
     if verbose:
         print(f"Found {len(matches)} total matches!")
     return matches
+
+
+def load_matchup(
+    filepath: Path,
+    download_missing: bool = False,
+    long_term_token: str | None = None,
+    client_esa: Client | None = None,
+    shortnames_earthcare: list[str] | None = None,
+) -> Matchup:
+    """TODO
+    :param filepath: Standardized path to the PACE name element of a matchup's mask filepath.
+    :type filepath: Path
+    :param download_missing:
+    """
+    assert filepath.stem.startswith("PACE_")
+
+    parts = filepath.parts
+    instrument_pace, level_pace = parts[-2].split("_")
+    filestem_pace = parts[-1]
+    shortname_pace = get_pace_shortname(instrument_pace, level_pace)
+    filepath_pace = PATH_DATA / "PACE" / instrument_pace / level_pace / f"{filestem_pace}.nc"
+    if download_missing and not filepath_pace.exists():
+        download_missing_pace_data(filepath_pace)
+
+    products_ec = sorted([fp.name for fp in filepath.glob("*/")])
+    if shortnames_earthcare:
+        products_ec = [p for p in products_ec if p in shortnames_earthcare]
+
+    matches_earthcare = []
+    for prod in products_ec:
+        filepaths_mask = sorted((filepath / prod).glob("*"))
+        for fp in filepaths_mask:
+            filepath_earthcare = PATH_DATA / "EarthCARE" / prod / f"{fp.stem}.h5"
+            if download_missing and not filepath_earthcare.exists():
+                if not isinstance(long_term_token, str):
+                    raise ValueError("You must provide a long_term_token to download missing EarthCARE data!")
+                if not isinstance(client_esa, Client):
+                    raise ValueError("You must provide a pystac Client to download missing EarthCARE data!")
+                download_missing_earthcare_data(filepath_earthcare, long_term_token, client_esa)
+            matches_earthcare.append(MatchEarthcare(
+                filepath_earthcare=filepath_earthcare,
+                mask=np.load(fp, allow_pickle=False),
+            ))
+    return Matchup(
+        filepath_pace=filepath_pace,
+        shortname_pace=shortname_pace,
+        matches_earthcare=matches_earthcare,
+    )
+
+
+def delete_matchup(
+    matchup: Matchup,
+    delete_associated_files: bool = False,
+) -> None:
+    """TODO
+    
+    Warning: If you have any other data stored in the matchup path, it will be
+    deleted too! For this reason it is highly suggested not to store data in
+    the matchups data directory.
+
+    TODO
+    """
+    matchup_path = PATH_DATA / "matchups" / "_".join(matchup.filepath_pace.parts[-3:-1]) / matchup.filepath_pace.stem
+    shutil.rmtree(matchup_path)
+    if not delete_associated_files:
+        return
+    os.remove(matchup.filepath_pace)
+    for match in matchup.matches_earthcare:
+        os.remove(match.filepath_earthcare)
+
+
+def get_all_matchup_paths() -> list[Path]:
+    """TODO"""
+    return sorted((PATH_DATA / "matchups").glob("*/*/"))
