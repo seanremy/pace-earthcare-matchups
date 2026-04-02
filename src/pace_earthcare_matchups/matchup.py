@@ -98,7 +98,7 @@ class MatchEarthcare:
     """
 
     filepath_earthcare: Path
-    mask: npt.NDArray[np.bool]
+    mask: npt.NDArray
 
     def get_earthcare_bounds(
         self, pts_per_side: int = 20
@@ -277,7 +277,7 @@ def get_matchup_mask(
     lon_pace: npt.NDArray[np.float32],
     lat_ec: npt.NDArray[np.float32],
     lon_ec: npt.NDArray[np.float32],
-) -> npt.NDArray[np.bool]:
+) -> npt.NDArray:
     """Get the mask of the overlap between PACE and EarthCARE lat/lon arrays. The mask
     is in the shape of the provided PACE data. PACE data is expected to be a 2D array.
 
