@@ -437,7 +437,6 @@ def get_matchup(
 
 
 def get_matchups(
-    client_esa: Client,
     shortname_pace: str,
     shortnames_earthcare: list[str],
     temporal: tuple[datetime, datetime],
@@ -458,7 +457,6 @@ def get_matchups(
     saves the matchup data to disk.
 
     Args:
-        client_esa: pySTAC client to access ESA data.
         shortname_pace: PACE collection short name.
         shortnames_earthcare: EarthCARE collection short names.
         temporal: The time range in which to retrieve data. Times are assumed to be UTC.
@@ -490,6 +488,7 @@ def get_matchups(
         bbox=bbox,
         limit=search_batch_size,
     )
+    client_esa = Client.open("https://catalog.maap.eo.esa.int/catalogue/")
 
     time_start = temporal[0]
     matches = []
