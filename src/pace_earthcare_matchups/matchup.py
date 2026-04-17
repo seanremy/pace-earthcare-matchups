@@ -553,7 +553,7 @@ def load_matchup(
     assert filepath.stem.startswith("PACE_")
 
     parts = filepath.parts
-    instrument_pace, level_pace = parts[-2].split("_")
+    instrument_pace, level_pace = parts[-3], parts[-2]
     filestem_pace = parts[-1]
     shortname_pace = get_pace_shortname(instrument_pace, level_pace)
     filepath_pace = PATH_DATA / "PACE" / instrument_pace / level_pace / f"{filestem_pace}.nc"
