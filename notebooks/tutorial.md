@@ -22,7 +22,6 @@ from datetime import datetime
 from pystac_client import Client
 
 from pace_earthcare_matchups.matchup import get_matchups
-from pace_earthcare_matchups.path_utils import PATH_TOKEN
 from pace_earthcare_matchups.plotting import plot_matchups
 ```
 
@@ -33,7 +32,6 @@ TIME_END = datetime(year=2025, month=9, day=2, hour=0, minute=0, second=0)
 # Keep southern hemisphere, non-polar overlaps only
 BBOX = (-180, -50, 180, 0)  # W, S, E, N order
 
-_ESA_MAAP_TOKEN = open(PATH_TOKEN).read()
 ESA_CATALOGUE = "https://catalog.maap.eo.esa.int/catalogue/"
 
 client_esa = Client.open(ESA_CATALOGUE)
@@ -42,7 +40,6 @@ client_esa = Client.open(ESA_CATALOGUE)
 ```{code-cell} ipython3
 matchups = get_matchups(
     client_esa=client_esa,
-    long_term_token=_ESA_MAAP_TOKEN,
     shortname_pace="PACE_OCI_L2_CLOUD",
     shortnames_earthcare=["ATL_CTH_2A", "AM__CTH_2B"],
     temporal=(TIME_START, TIME_END),

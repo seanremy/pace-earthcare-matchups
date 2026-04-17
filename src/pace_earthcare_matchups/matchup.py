@@ -54,7 +54,7 @@ from pace_earthcare_matchups.pace import (
     get_nadir_idx_harp2_l1b,
     get_pace_shortname,
 )
-from pace_earthcare_matchups.path_utils import PATH_DATA, get_path
+from pace_earthcare_matchups.path_utils import PATH_DATA, PATH_TOKEN, get_path
 from pace_earthcare_matchups.supported_products import (
     EARTHCARE_SHORTNAMES,
     PACE_SHORTNAMES,
@@ -362,14 +362,12 @@ def get_matchup_mask(
 
 def get_matchup(
     meta_matchup: MetaMatchup,
-    long_term_token: str,
 ) -> tuple[Matchup, list[Path]]:
     """Get a matchup from a metadata matchup. Downloads the associated EarthCARE and
     PACE data, then get the mask describing their overlap.
 
     Args:
         meta_matchup: A metadata matchup.
-        long_term_token: A long term token to the ESA MAAP.
 
     Returns:
         matchup: The matchup derived from the provided metadata matchup.
@@ -382,7 +380,6 @@ def get_matchup(
         if not path_earthcare.exists():
             download_earthcare_item(
                 item=meta_match.item,
-                long_term_token=long_term_token,
                 datadir=path_earthcare.parent,
             )
             paths_added.append(path_earthcare)
@@ -441,7 +438,6 @@ def get_matchup(
 
 def get_matchups(
     client_esa: Client,
-    long_term_token: str,
     shortname_pace: str,
     shortnames_earthcare: list[str],
     temporal: tuple[datetime, datetime],
@@ -463,7 +459,6 @@ def get_matchups(
 
     Args:
         client_esa: pySTAC client to access ESA data.
-        long_term_token: A long term token to the ESA MAAP.
         shortname_pace: PACE collection short name.
         shortnames_earthcare: EarthCARE collection short names.
         temporal: The time range in which to retrieve data. Times are assumed to be UTC.
@@ -518,7 +513,7 @@ def get_matchups(
                 time_offset=time_offset,
             )
             if meta_match:
-                match, paths_added = get_matchup(meta_match, long_term_token)
+                match, paths_added = get_matchup(meta_match)
                 if filter_fn is None or filter_fn(match):
                     if save:
                         match.save()
@@ -547,7 +542,6 @@ def get_matchups(
 def load_matchup(
     filepath: Path,
     download_missing: bool = False,
-    long_term_token: str | None = None,
     client_esa: Client | None = None,
     shortnames_earthcare: list[str] | None = None,
 ) -> Matchup:
@@ -570,6 +564,7 @@ def load_matchup(
     if shortnames_earthcare:
         products_ec = [p for p in products_ec if p in shortnames_earthcare]
 
+    long_term_token = open(PATH_TOKEN).read()
     matches_earthcare = []
     for prod in products_ec:
         filepaths_mask = sorted((filepath / prod).glob("*"))
