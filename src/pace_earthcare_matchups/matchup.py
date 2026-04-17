@@ -190,10 +190,11 @@ class Matchup:
             ).astype(float)
             reorder_latlon_l2 = (
                 data_pace.processing_version <= "3.1"
-                and self.shortname_pace
+                and self.shortname_pace.rstrip("_NRT")
                 in [
                     "PACE_OCI_L2_AOP",
                     "PACE_OCI_L2_BGC",
+                    "PACE_OCI_L2_CLOUD",
                     "PACE_OCI_L2_IOP",
                     "PACE_OCI_L2_LANDVI",
                     "PACE_OCI_L2_PAR",
