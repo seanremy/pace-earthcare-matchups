@@ -5,6 +5,7 @@ parsing filenames.
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from dateutil import parser
+import os
 from pathlib import Path
 import warnings
 from zoneinfo import ZoneInfo
@@ -15,7 +16,6 @@ from maap.Result import Granule as MAAPGranule
 from maap.maap import MAAP
 import netCDF4
 import numpy as np
-import os
 from shapely import MultiPolygon, Polygon
 
 from pace_earthcare_matchups.geospatial_utils import correct_polygon
@@ -23,6 +23,15 @@ from pace_earthcare_matchups.path_utils import PATH_DATA
 
 
 CMR_HOST = "cmr.earthdata.nasa.gov"
+
+
+def _earthaccess_login():
+    if "MAAP_PGT" in os.environ:
+        maap = MAAP(maap_host="api.maap-project.org")
+        acc_info = maap.profile.account_info()
+        assert isinstance(acc_info, dict)
+        os.environ["EARTHDATA_TOKEN"] = acc_info['urs_token']
+    earthaccess.login(persist=True)
 
 
 class Granule:
@@ -66,7 +75,7 @@ class Granule:
             # download function
             self._download = lambda: result.getData(str(self.filepath.parent))
         elif isinstance(result, DataGranule):
-            earthaccess.login(persist=True)
+            _earthaccess_login()
             # short name
             self.short_name = result["umm"]["CollectionReference"]["ShortName"]
             # beginning and ending datetime
@@ -103,7 +112,7 @@ class Granule:
                 self.geospatial_bounds = MultiPolygon(polys)
             # download function
             self._download = lambda: (
-                earthaccess.login(persist=True),
+                _earthaccess_login(),
                 earthaccess.download(
                     [result],
                     self.filepath.parent,
