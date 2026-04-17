@@ -599,7 +599,7 @@ def delete_matchup(
 
     TODO
     """
-    matchup_path = PATH_DATA / "matchups" / "_".join(matchup.filepath_pace.parts[-3:-1]) / matchup.filepath_pace.stem
+    matchup_path = PATH_DATA / "matchups" / matchup.filepath_pace.parts[-3] / matchup.filepath_pace.parts[-2] / matchup.filepath_pace.stem
     shutil.rmtree(matchup_path)
     if not delete_associated_files:
         return
