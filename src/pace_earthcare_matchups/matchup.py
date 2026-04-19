@@ -201,7 +201,6 @@ class Matchup:
                     "PACE_OCI_L2_SFREFL",
                 ]
             )
-            print(self.shortname_pace)
             if reorder_latlon_l2:
                 poly_arr = poly_arr[..., ::-1]
             return correct_polygon(Polygon(poly_arr))
