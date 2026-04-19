@@ -23,6 +23,10 @@ from pace_earthcare_matchups.path_utils import PATH_DATA
 
 
 CMR_HOST = "cmr.earthdata.nasa.gov"
+SHORT_NAME_REPLACEMENTS = {
+    "CLD": "CLOUD",
+    "CLDMASK": "CLOUD_MASK",
+}
 
 
 def _earthaccess_login():
@@ -199,11 +203,20 @@ def get_nadir_idx_harp2_l1b(data_pace: netCDF4.Dataset) -> int:
     return int(idx_nadir.item())
 
 
-def get_pace_shortname(instrument: str, level: str) -> str:
+def get_pace_shortname(instrument: str, level: str, filestem: str) -> str:
     """TODO"""
     shortname_pace = f"PACE_{instrument}_{level}"
     if level[1] == "1":
         shortname_pace += "_SCI"
+    elif level[1] == "2":
+        prod = filestem.split(".")[3]
+        if prod in SHORT_NAME_REPLACEMENTS:
+            prod = SHORT_NAME_REPLACEMENTS[prod]
+        shortname_pace += "_" + prod
+    else:
+        raise ValueError(f"Level must be 'L1' or 'L2', but got: '{level}'")
+    if filestem.split(".")[-1] == "NRT":
+        shortname_pace += "_NRT"
     return shortname_pace
     
 
@@ -252,7 +265,7 @@ def parse_pace_filename(filename: str | Path) -> PaceNameData:
 
 def download_missing_pace_data(filepath: Path) -> None:
     pace_namedata = parse_pace_filename(filepath)
-    shortname = get_pace_shortname(pace_namedata.instrument, pace_namedata.level)
+    shortname = get_pace_shortname(pace_namedata.instrument, pace_namedata.level, filepath.stem)
     time_window=(
         pace_namedata.start_time + timedelta(seconds=1),
         pace_namedata.start_time + timedelta(seconds=2),

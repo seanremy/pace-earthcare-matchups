@@ -12,8 +12,6 @@ PACE_SHORTNAMES = [
     # "PACE_SPEXONE_L1B_SCI",  # not yet supported TODO
     "PACE_SPEXONE_L1C_SCI",
     # Level 2
-    "PACE_HARP2_L2_CLOUD_GPC",
-    "PACE_HARP2_L2_CLOUD_GPC_NRT",
     # "PACE_HARP2_L2_MAPOL_OCEAN",  # not yet supported (no geospatial bounds) TODO
     # "PACE_HARP2_L2_MAPOL_OCEAN_NRT",
     "PACE_OCI_L2_AER_UAA",

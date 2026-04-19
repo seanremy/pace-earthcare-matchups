@@ -201,6 +201,7 @@ class Matchup:
                     "PACE_OCI_L2_SFREFL",
                 ]
             )
+            print(self.shortname_pace)
             if reorder_latlon_l2:
                 poly_arr = poly_arr[..., ::-1]
             return correct_polygon(Polygon(poly_arr))
@@ -553,9 +554,9 @@ def load_matchup(
     assert filepath.stem.startswith("PACE_")
 
     parts = filepath.parts
-    instrument_pace, level_pace = parts[-3], parts[-2]
+    instrument_pace, level_pace = parts[-2].split("_")
     filestem_pace = parts[-1]
-    shortname_pace = get_pace_shortname(instrument_pace, level_pace)
+    shortname_pace = get_pace_shortname(instrument_pace, level_pace, filestem_pace)
     filepath_pace = PATH_DATA / "PACE" / instrument_pace / level_pace / f"{filestem_pace}.nc"
     if download_missing and not filepath_pace.exists():
         download_missing_pace_data(filepath_pace)
@@ -571,10 +572,8 @@ def load_matchup(
         for fp in filepaths_mask:
             filepath_earthcare = PATH_DATA / "EarthCARE" / prod / f"{fp.stem}.h5"
             if download_missing and not filepath_earthcare.exists():
-                if not isinstance(long_term_token, str):
-                    raise ValueError("You must provide a long_term_token to download missing EarthCARE data!")
-                if not isinstance(client_esa, Client):
-                    raise ValueError("You must provide a pystac Client to download missing EarthCARE data!")
+                assert isinstance(long_term_token, str)
+                assert isinstance(client_esa, Client)
                 download_missing_earthcare_data(filepath_earthcare, long_term_token, client_esa)
             matches_earthcare.append(MatchEarthcare(
                 filepath_earthcare=filepath_earthcare,
