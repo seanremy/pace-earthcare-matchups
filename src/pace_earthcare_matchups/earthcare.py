@@ -151,7 +151,7 @@ def download_missing_earthcare_data(
     client_esa: Client,
 ) -> None:
     ec_namedata = parse_earthcare_filename(filepath)
-    
+
     time_window = (
         ec_namedata.val_start + timedelta(seconds=1),
         ec_namedata.val_start + timedelta(seconds=2),

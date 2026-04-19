@@ -496,12 +496,18 @@ def get_matchups(
     matches = []
     while len(results_pace) > 0:
         if verbose:
-            t_start_str = datetime.strftime(results_pace[0].beginning_datetime, "%Y-%m-%d|%H:%M:%S")
-            t_end_str = datetime.strftime(results_pace[-1].ending_datetime, "%Y-%m-%d|%H:%M:%S")
+            t_start_str = datetime.strftime(
+                results_pace[0].beginning_datetime, "%Y-%m-%d|%H:%M:%S"
+            )
+            t_end_str = datetime.strftime(
+                results_pace[-1].ending_datetime, "%Y-%m-%d|%H:%M:%S"
+            )
             print(f"{len(matches)}/{limit} matches so far.")
-            print(f"Batch of {len(results_pace)} new {shortname_pace} results found "
-                  f"from {t_start_str} -> {t_end_str}.")
-            pbar = tqdm(results_pace, desc=f"Searching batch")
+            print(
+                f"Batch of {len(results_pace)} new {shortname_pace} results found "
+                f"from {t_start_str} -> {t_end_str}."
+            )
+            pbar = tqdm(results_pace, desc="Searching batch")
         else:
             pbar = results_pace
         for result_pace in pbar:
@@ -557,7 +563,9 @@ def load_matchup(
     instrument_pace, level_pace = parts[-2].split("_")
     filestem_pace = parts[-1]
     shortname_pace = get_pace_shortname(instrument_pace, level_pace, filestem_pace)
-    filepath_pace = PATH_DATA / "PACE" / instrument_pace / level_pace / f"{filestem_pace}.nc"
+    filepath_pace = (
+        PATH_DATA / "PACE" / instrument_pace / level_pace / f"{filestem_pace}.nc"
+    )
     if download_missing and not filepath_pace.exists():
         download_missing_pace_data(filepath_pace)
 
@@ -574,11 +582,15 @@ def load_matchup(
             if download_missing and not filepath_earthcare.exists():
                 assert isinstance(long_term_token, str)
                 assert isinstance(client_esa, Client)
-                download_missing_earthcare_data(filepath_earthcare, long_term_token, client_esa)
-            matches_earthcare.append(MatchEarthcare(
-                filepath_earthcare=filepath_earthcare,
-                mask=np.load(fp, allow_pickle=False),
-            ))
+                download_missing_earthcare_data(
+                    filepath_earthcare, long_term_token, client_esa
+                )
+            matches_earthcare.append(
+                MatchEarthcare(
+                    filepath_earthcare=filepath_earthcare,
+                    mask=np.load(fp, allow_pickle=False),
+                )
+            )
     return Matchup(
         filepath_pace=filepath_pace,
         shortname_pace=shortname_pace,
@@ -591,14 +603,20 @@ def delete_matchup(
     delete_associated_files: bool = False,
 ) -> None:
     """TODO
-    
+
     Warning: If you have any other data stored in the matchup path, it will be
     deleted too! For this reason it is highly suggested not to store data in
     the matchups data directory.
 
     TODO
     """
-    matchup_path = PATH_DATA / "matchups" / matchup.filepath_pace.parts[-3] / matchup.filepath_pace.parts[-2] / matchup.filepath_pace.stem
+    matchup_path = (
+        PATH_DATA
+        / "matchups"
+        / matchup.filepath_pace.parts[-3]
+        / matchup.filepath_pace.parts[-2]
+        / matchup.filepath_pace.stem
+    )
     shutil.rmtree(matchup_path)
     if not delete_associated_files:
         return

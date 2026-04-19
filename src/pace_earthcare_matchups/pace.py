@@ -34,7 +34,7 @@ def _earthaccess_login():
         maap = MAAP(maap_host="api.maap-project.org")
         acc_info = maap.profile.account_info()
         assert isinstance(acc_info, dict)
-        os.environ["EARTHDATA_TOKEN"] = acc_info['urs_token']
+        os.environ["EARTHDATA_TOKEN"] = acc_info["urs_token"]
     earthaccess.login(persist=True)
 
 
@@ -141,7 +141,9 @@ def _query_cmr(
     bbox: tuple[float, float, float, float] = (-180, -90, 180, 90),
 ) -> list[Granule]:
     """TODO remove underscore, document"""
-    use_earthaccess = bool(int(os.getenv("PACE_EARTHCARE_MATCHUPS_USE_EARTHACCESS", "0")))
+    use_earthaccess = bool(
+        int(os.getenv("PACE_EARTHCARE_MATCHUPS_USE_EARTHACCESS", "0"))
+    )
     if not use_earthaccess:
         bbox_str = ",".join([str(n) for n in bbox])
         results_pace = MAAP().searchGranule(
@@ -218,7 +220,7 @@ def get_pace_shortname(instrument: str, level: str, filestem: str) -> str:
     if filestem.split(".")[-1] == "NRT":
         shortname_pace += "_NRT"
     return shortname_pace
-    
+
 
 @dataclass
 class PaceNameData:
@@ -248,11 +250,15 @@ def parse_pace_filename(filename: str | Path) -> PaceNameData:
     for s in stem_list[3:]:
         if s.startswith("V") and s[1:].replace("_", "").isnumeric():
             if isinstance(version, str):
-                raise ValueError(f"Got conflicting values {version} and {s} for version!")
+                raise ValueError(
+                    f"Got conflicting values {version} and {s} for version!"
+                )
             version = s
         else:
             if isinstance(product, str):
-                raise ValueError(f"Got conflicting values {product} and {s} for product!")
+                raise ValueError(
+                    f"Got conflicting values {product} and {s} for product!"
+                )
             product = s
     return PaceNameData(
         instrument,
@@ -265,12 +271,14 @@ def parse_pace_filename(filename: str | Path) -> PaceNameData:
 
 def download_missing_pace_data(filepath: Path) -> None:
     pace_namedata = parse_pace_filename(filepath)
-    shortname = get_pace_shortname(pace_namedata.instrument, pace_namedata.level, filepath.stem)
-    time_window=(
+    shortname = get_pace_shortname(
+        pace_namedata.instrument, pace_namedata.level, filepath.stem
+    )
+    time_window = (
         pace_namedata.start_time + timedelta(seconds=1),
         pace_namedata.start_time + timedelta(seconds=2),
     )
-    
+
     results = _query_cmr(
         short_name=shortname,
         temporal=time_window,
