@@ -63,7 +63,7 @@ def download_earthcare_item(item: Item, datadir: Path) -> Path:
     path_outfile = datadir / filename
     if path_outfile.exists():
         return path_outfile
-    long_term_token = open(PATH_TOKEN).read()
+    long_term_token = open(PATH_TOKEN).read().rstrip("\n")
     response = requests.get(
         url_h5,
         headers={"Authorization": f"Bearer {get_short_term_token(long_term_token)}"},
