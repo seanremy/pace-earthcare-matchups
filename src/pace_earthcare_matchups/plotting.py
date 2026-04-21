@@ -25,6 +25,7 @@ def plot_matchups(
     matchups: list[Matchup],
     figsize: tuple[int, int] | None = None,
     fig_filepath: Path | str | None = None,
+    central_longitude: float = 0,
 ) -> None:
     """Plot a list of matchups and optionally save the figure to file.
 
@@ -32,10 +33,13 @@ def plot_matchups(
         matchups: List of matchups to be plotted.
         figsize: Size of the matplotlib figure as an (x, y) tuple.
         fig_filepath: If provided, saves the figure to this path. Should end in ".png".
+        central_longitude: Central longitude of the created plot. Default: 0.
     """
     if isinstance(fig_filepath, str):
         fig_filepath = Path(fig_filepath)
-    ax = plt.figure(figsize=figsize).add_subplot(projection=ccrs.PlateCarree())
+    ax = plt.figure(figsize=figsize).add_subplot(
+        projection=ccrs.PlateCarree(central_longitude=central_longitude)
+    )
     assert isinstance(ax, GeoAxes)
     ax.stock_img(alpha=0.8)
     ax.add_feature(cfeature.COASTLINE)
