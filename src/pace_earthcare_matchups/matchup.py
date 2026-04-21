@@ -582,7 +582,7 @@ def load_matchup(
                 assert isinstance(long_term_token, str)
                 assert isinstance(client_esa, Client)
                 download_missing_earthcare_data(
-                    filepath_earthcare, long_term_token, client_esa
+                    filepath_earthcare, client_esa
                 )
             matches_earthcare.append(
                 MatchEarthcare(

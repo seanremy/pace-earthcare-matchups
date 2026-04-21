@@ -147,7 +147,6 @@ def parse_earthcare_filename(filename: str | Path) -> EarthcareNameData:
 
 def download_missing_earthcare_data(
     filepath: Path,
-    long_term_token: str,
     client_esa: Client,
 ) -> None:
     ec_namedata = parse_earthcare_filename(filepath)
