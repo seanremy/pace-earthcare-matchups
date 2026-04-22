@@ -115,10 +115,8 @@ def plot_matchups(
             geoms.append(poly_u)
         elif isinstance(bounds, MultiLineString):
             assert len(bounds.geoms) == 2
-            line1 = line_shift(bounds.geoms[0], shift=-lon_shift)
-            line2 = line_shift(bounds.geoms[0], shift=-lon_shift)
-            line_u = line1.union(line2)
-            geoms.append(line_u)
+            geoms.append(line_shift(bounds.geoms[0], shift=-lon_shift))
+            geoms.append(line_shift(bounds.geoms[0], shift=-lon_shift))
         elif isinstance(bounds, Polygon):
             geoms.append(poly_shift(bounds, shift=-lon_shift))
         else:
@@ -136,7 +134,7 @@ def plot_matchups(
                     linewidth=2,
                     label=label,
                 )[0]
-            elif isinstance(geom, Polygon):
+            if isinstance(geom, Polygon):
                 coords_geom = np.array(geom.exterior.coords)
                 _update_extent(coords_geom)
                 plot_element = ax.fill(
