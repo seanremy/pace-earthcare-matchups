@@ -18,7 +18,7 @@ from shapely import (
     Polygon,
 )
 
-from pace_earthcare_matchups.geospatial_utils import geom_to_coords
+from pace_earthcare_matchups.geospatial_utils import geom_to_coords, line_shift, poly_shift
 from pace_earthcare_matchups.matchup import Matchup
 
 
@@ -105,15 +105,29 @@ def plot_matchups(
     def _plot_bounds(
         bounds: LineString | MultiLineString | Polygon | MultiPolygon, label: str
     ) -> matplotlib.lines.Line2D | matplotlib.patches.Polygon:
-        if isinstance(bounds, MultiLineString | MultiPolygon):
-            geoms = bounds.geoms
+        geoms = []
+        if isinstance(bounds, MultiPolygon):
+            assert len(bounds.geoms) == 2
+            poly1 = poly_shift(bounds.geoms[0], shift=-lon_shift)
+            poly2 = poly_shift(bounds.geoms[1], shift=-lon_shift)
+            poly_u = poly1.union(poly2)
+            assert isinstance(poly_u, Polygon)
+            geoms.append(poly_u)
+        elif isinstance(bounds, MultiLineString):
+            assert len(bounds.geoms) == 2
+            line1 = line_shift(bounds.geoms[0], shift=-lon_shift)
+            line2 = line_shift(bounds.geoms[0], shift=-lon_shift)
+            line_u = line1.union(line2)
+            geoms.append(line_u)
+        elif isinstance(bounds, Polygon):
+            geoms.append(poly_shift(bounds, shift=-lon_shift))
         else:
-            geoms = [bounds]
+            assert isinstance(bounds, LineString)
+            geoms.append(line_shift(bounds, shift=-lon_shift))
         plot_element = None
         for geom in geoms:
             if isinstance(geom, LineString):
                 coords_geom = np.array(geom.coords)
-                coords_geom[..., 0] = (coords_geom[..., 0] - lon_shift + 180) % 360 - 180
                 _update_extent(coords_geom)
                 plot_element = ax.plot(
                     coords_geom[..., 0],
@@ -124,7 +138,6 @@ def plot_matchups(
                 )[0]
             elif isinstance(geom, Polygon):
                 coords_geom = np.array(geom.exterior.coords)
-                coords_geom[..., 0] = (coords_geom[..., 0] - lon_shift + 180) % 360 - 180
                 _update_extent(coords_geom)
                 plot_element = ax.fill(
                     coords_geom[..., 0],
@@ -136,7 +149,7 @@ def plot_matchups(
                 )[0]
             else:
                 raise TypeError(
-                    f"Did not know how to handle geometry type: {type(geoms[0])}"
+                    f"Did not know how to handle geometry type: {type(geom)}"
                 )
         assert plot_element
         return plot_element
@@ -156,7 +169,7 @@ def plot_matchups(
                 bounds_earthcare, label_earthcare
             )
     ax.set_title("PACE / EarthCARE Matchups")
-    ax.legend(handles=plot_elements.values())
+    ax.legend(handles=[e[1] for e in sorted(plot_elements.items(), key=lambda i: i[0])])
     ax.set_xlim(max(-180, minlon - 5), min(180, maxlon + 5))
     
     ax.set_ylim(max(-90, minlat - 5), min(90, maxlat + 5))

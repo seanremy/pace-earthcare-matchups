@@ -432,6 +432,22 @@ def geom_to_coords(geom: LineString | MultiLineString | Polygon | MultiPolygon) 
     return np.concatenate(coords)
 
 
+def poly_shift(poly: Polygon, shift: float):
+    """TODO
+    """
+    coords = np.array(poly.exterior.coords)
+    coords[:, 0] = (coords[:, 0] + 180 + shift) % 360 - 180
+    return Polygon(coords)
+
+
+def line_shift(line: LineString, shift: float):
+    """TODO
+    """
+    coords = np.array(line.coords)
+    coords[:, 0] = (coords[:, 0] + 180 + shift) % 360 - 180
+    return LineString(coords)
+
+
 def get_centered_latlon(
     lat: npt.NDArray[np.float32 | np.float64],
     lon: npt.NDArray[np.float32 | np.float64],
