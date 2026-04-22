@@ -413,6 +413,25 @@ def correct_linestring(line: LineString) -> LineString | MultiLineString:
     return MultiLineString([LineString(c) for c in coords])
 
 
+def geom_to_coords(geom: LineString | MultiLineString | Polygon | MultiPolygon) -> npt.NDArray:
+    """TODO
+    """
+    if isinstance(geom, LineString):
+        return np.array(geom.coords)
+    if isinstance(geom, MultiLineString):
+        coords = []
+        for g in geom.geoms:
+            coords.append(np.array(g.coords))
+        return np.concatenate(coords)
+    if isinstance(geom, Polygon):
+        return np.array(geom.exterior.coords)
+    assert isinstance(geom, MultiPolygon)
+    coords = []
+    for g in geom.geoms:
+        coords.append(np.array(g.exterior.coords))
+    return np.concatenate(coords)
+
+
 def get_centered_latlon(
     lat: npt.NDArray[np.float32 | np.float64],
     lon: npt.NDArray[np.float32 | np.float64],
@@ -420,6 +439,9 @@ def get_centered_latlon(
     """Get latitude and longitude arrays centered so that the mean longitude is 0.
     To resolve ambiguity arising from the circularity of longitude, this function
     assumes the maximum range of longitudes when properly centered is less than 180.
+    A robust solution for the longitude phase shift (which minimizes the range of
+    values) requires a sorting of the flattened longitude array. For large arrays this
+    is a bit slow, hence the simplifying assumption here.
 
     Args:
         lat: Latitude array.
