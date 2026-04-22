@@ -195,18 +195,20 @@ class Matchup:
             if reorder_latlon_l2:
                 poly_arr = poly_arr[..., ::-1]
             return correct_polygon(Polygon(poly_arr))
-        elif self.shortname_pace == "PACE_HARP2_L1B_SCI":
-            idx_nadir = get_nadir_idx_harp2_l1b(data_pace)
-            lat = data_pace["geolocation_data/latitude"][idx_nadir].filled(
-                fill_value=np.nan
-            )
-            lon = data_pace["geolocation_data/longitude"][idx_nadir].filled(
-                fill_value=np.nan
-            )
+        else:
+            if self.shortname_pace == "PACE_HARP2_L1B_SCI":
+                idx_nadir = get_nadir_idx_harp2_l1b(data_pace)
+                lat = data_pace["geolocation_data/latitude"][idx_nadir].filled(
+                    fill_value=np.nan
+                )
+                lon = data_pace["geolocation_data/longitude"][idx_nadir].filled(
+                    fill_value=np.nan
+                )
+            else:
+                lat = data_pace["geolocation_data/latitude"][()].filled(fill_value=np.nan)
+                lon = data_pace["geolocation_data/longitude"][()].filled(fill_value=np.nan)
             latlon_ring = get_outer_ring(np.stack([lon, lat], axis=-1))
             return correct_polygon(Polygon(latlon_ring))
-        else:
-            raise NotImplementedError
 
 
 def get_meta_matchup_from_granule(
