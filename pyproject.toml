@@ -13,6 +13,7 @@ dependencies = [
     "numpy",
     "pystac",
     "pystac_client",
+    "scipy",
     "seaborn",
     "shapely",
     "tqdm",
