@@ -134,7 +134,7 @@ def plot_matchups(
                     linewidth=2,
                     label=label,
                 )[0]
-            if isinstance(geom, Polygon):
+            elif isinstance(geom, Polygon):
                 coords_geom = np.array(geom.exterior.coords)
                 _update_extent(coords_geom)
                 plot_element = ax.fill(
