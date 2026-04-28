@@ -5,6 +5,7 @@ parsing filenames.
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from dateutil import parser
+import os
 from pathlib import Path
 import warnings
 from zoneinfo import ZoneInfo
@@ -15,7 +16,6 @@ from maap.Result import Granule as MAAPGranule
 from maap.maap import MAAP
 import netCDF4
 import numpy as np
-import os
 from shapely import MultiPolygon, Polygon
 
 from pace_earthcare_matchups.geospatial_utils import correct_polygon
@@ -23,6 +23,19 @@ from pace_earthcare_matchups.path_utils import PATH_DATA
 
 
 CMR_HOST = "cmr.earthdata.nasa.gov"
+SHORT_NAME_REPLACEMENTS = {
+    "CLD": "CLOUD",
+    "CLDMASK": "CLOUD_MASK",
+}
+
+
+def _earthaccess_login():
+    if "MAAP_PGT" in os.environ:
+        maap = MAAP(maap_host="api.maap-project.org")
+        acc_info = maap.profile.account_info()
+        assert isinstance(acc_info, dict)
+        os.environ["EARTHDATA_TOKEN"] = acc_info["urs_token"]
+    earthaccess.login(persist=True)
 
 
 class Granule:
@@ -66,7 +79,7 @@ class Granule:
             # download function
             self._download = lambda: result.getData(str(self.filepath.parent))
         elif isinstance(result, DataGranule):
-            earthaccess.login(persist=True)
+            _earthaccess_login()
             # short name
             self.short_name = result["umm"]["CollectionReference"]["ShortName"]
             # beginning and ending datetime
@@ -103,7 +116,7 @@ class Granule:
                 self.geospatial_bounds = MultiPolygon(polys)
             # download function
             self._download = lambda: (
-                earthaccess.login(persist=True),
+                _earthaccess_login(),
                 earthaccess.download(
                     [result],
                     self.filepath.parent,
@@ -128,7 +141,9 @@ def _query_cmr(
     bbox: tuple[float, float, float, float] = (-180, -90, 180, 90),
 ) -> list[Granule]:
     """TODO remove underscore, document"""
-    use_earthaccess = bool(int(os.getenv("PACE_EARTHCARE_MATCHUPS_USE_EARTHACCESS", "0")))
+    use_earthaccess = bool(
+        int(os.getenv("PACE_EARTHCARE_MATCHUPS_USE_EARTHACCESS", "0"))
+    )
     if not use_earthaccess:
         bbox_str = ",".join([str(n) for n in bbox])
         results_pace = MAAP().searchGranule(
@@ -190,13 +205,22 @@ def get_nadir_idx_harp2_l1b(data_pace: netCDF4.Dataset) -> int:
     return int(idx_nadir.item())
 
 
-def get_pace_shortname(instrument: str, level: str) -> str:
+def get_pace_shortname(instrument: str, level: str, filestem: str) -> str:
     """TODO"""
     shortname_pace = f"PACE_{instrument}_{level}"
     if level[1] == "1":
         shortname_pace += "_SCI"
+    elif level[1] == "2":
+        prod = filestem.split(".")[3]
+        if prod in SHORT_NAME_REPLACEMENTS:
+            prod = SHORT_NAME_REPLACEMENTS[prod]
+        shortname_pace += "_" + prod
+    else:
+        raise ValueError(f"Level must be 'L1' or 'L2', but got: '{level}'")
+    if filestem.split(".")[-1] == "NRT":
+        shortname_pace += "_NRT"
     return shortname_pace
-    
+
 
 @dataclass
 class PaceNameData:
@@ -226,11 +250,15 @@ def parse_pace_filename(filename: str | Path) -> PaceNameData:
     for s in stem_list[3:]:
         if s.startswith("V") and s[1:].replace("_", "").isnumeric():
             if isinstance(version, str):
-                raise ValueError(f"Got conflicting values {version} and {s} for version!")
+                raise ValueError(
+                    f"Got conflicting values {version} and {s} for version!"
+                )
             version = s
         else:
             if isinstance(product, str):
-                raise ValueError(f"Got conflicting values {product} and {s} for product!")
+                raise ValueError(
+                    f"Got conflicting values {product} and {s} for product!"
+                )
             product = s
     return PaceNameData(
         instrument,
@@ -243,12 +271,14 @@ def parse_pace_filename(filename: str | Path) -> PaceNameData:
 
 def download_missing_pace_data(filepath: Path) -> None:
     pace_namedata = parse_pace_filename(filepath)
-    shortname = get_pace_shortname(pace_namedata.instrument, pace_namedata.level)
-    time_window=(
+    shortname = get_pace_shortname(
+        pace_namedata.instrument, pace_namedata.level, filepath.stem
+    )
+    time_window = (
         pace_namedata.start_time + timedelta(seconds=1),
         pace_namedata.start_time + timedelta(seconds=2),
     )
-    
+
     results = _query_cmr(
         short_name=shortname,
         temporal=time_window,

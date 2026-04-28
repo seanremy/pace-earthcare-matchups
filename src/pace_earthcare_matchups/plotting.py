@@ -18,7 +18,37 @@ from shapely import (
     Polygon,
 )
 
+from pace_earthcare_matchups.geospatial_utils import geom_to_coords, line_shift, poly_shift
 from pace_earthcare_matchups.matchup import Matchup
+
+
+def get_best_longitude_shift(matchups: list[Matchup]) -> float:
+    """For a list of matchups, compute the longitude shift which 
+    """
+    # flatten all geometries into a single array of longitudes
+    lon = []
+    for matchup in matchups:
+        bounds_pace = matchup.get_pace_bounds()
+        lon.append(geom_to_coords(bounds_pace)[:, 0].ravel())
+        for match in matchup.matches_earthcare:
+            bounds_earthcare = match.get_earthcare_bounds()
+            lon.append(geom_to_coords(bounds_earthcare)[:, 0].ravel())
+    lon = np.concatenate(lon)
+    assert lon.min() >= -180 and lon.max() <= 180
+    # sort the longitudes
+    lon = np.sort(lon)
+    # get the differences in longitudes, accounting for the wrap
+    diffs = np.concatenate([np.diff(lon), [lon[0] + 360 - lon[-1]]])
+    # find the largest jump
+    idx_jump = np.argmax(diffs)
+    # determine the antemeridian
+    if idx_jump == diffs.shape[0] - 1:
+        # "edge case" where 180 already separates the data
+        antemeridian = (lon[-1] + lon[0]) / 2 % 360 - 180
+    else:
+        antemeridian = (lon[idx_jump] + lon[idx_jump + 1]) / 2
+    lon_shift = antemeridian % 360 - 180
+    return lon_shift.item()
 
 
 def plot_matchups(
@@ -32,10 +62,14 @@ def plot_matchups(
         matchups: List of matchups to be plotted.
         figsize: Size of the matplotlib figure as an (x, y) tuple.
         fig_filepath: If provided, saves the figure to this path. Should end in ".png".
+        central_longitude: Central longitude of the created plot. Default: 0.
     """
     if isinstance(fig_filepath, str):
         fig_filepath = Path(fig_filepath)
-    ax = plt.figure(figsize=figsize).add_subplot(projection=ccrs.PlateCarree())
+    lon_shift = get_best_longitude_shift(matchups)
+    ax = plt.figure(figsize=figsize).add_subplot(
+        projection=ccrs.PlateCarree(central_longitude=lon_shift)
+    )
     assert isinstance(ax, GeoAxes)
     ax.stock_img(alpha=0.8)
     ax.add_feature(cfeature.COASTLINE)
@@ -71,10 +105,23 @@ def plot_matchups(
     def _plot_bounds(
         bounds: LineString | MultiLineString | Polygon | MultiPolygon, label: str
     ) -> matplotlib.lines.Line2D | matplotlib.patches.Polygon:
-        if isinstance(bounds, MultiLineString | MultiPolygon):
-            geoms = bounds.geoms
+        geoms = []
+        if isinstance(bounds, MultiPolygon):
+            assert len(bounds.geoms) == 2
+            poly1 = poly_shift(bounds.geoms[0], shift=-lon_shift)
+            poly2 = poly_shift(bounds.geoms[1], shift=-lon_shift)
+            poly_u = poly1.union(poly2)
+            assert isinstance(poly_u, Polygon)
+            geoms.append(poly_u)
+        elif isinstance(bounds, MultiLineString):
+            assert len(bounds.geoms) == 2
+            geoms.append(line_shift(bounds.geoms[0], shift=-lon_shift))
+            geoms.append(line_shift(bounds.geoms[0], shift=-lon_shift))
+        elif isinstance(bounds, Polygon):
+            geoms.append(poly_shift(bounds, shift=-lon_shift))
         else:
-            geoms = [bounds]
+            assert isinstance(bounds, LineString)
+            geoms.append(line_shift(bounds, shift=-lon_shift))
         plot_element = None
         for geom in geoms:
             if isinstance(geom, LineString):
@@ -100,7 +147,7 @@ def plot_matchups(
                 )[0]
             else:
                 raise TypeError(
-                    f"Did not know how to handle geometry type: {type(geoms[0])}"
+                    f"Did not know how to handle geometry type: {type(geom)}"
                 )
         assert plot_element
         return plot_element
@@ -120,8 +167,9 @@ def plot_matchups(
                 bounds_earthcare, label_earthcare
             )
     ax.set_title("PACE / EarthCARE Matchups")
-    ax.legend(handles=plot_elements.values())
+    ax.legend(handles=[e[1] for e in sorted(plot_elements.items(), key=lambda i: i[0])])
     ax.set_xlim(max(-180, minlon - 5), min(180, maxlon + 5))
+    
     ax.set_ylim(max(-90, minlat - 5), min(90, maxlat + 5))
 
     if fig_filepath:

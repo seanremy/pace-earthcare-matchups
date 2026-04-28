@@ -54,7 +54,7 @@ from pace_earthcare_matchups.pace import (
     get_nadir_idx_harp2_l1b,
     get_pace_shortname,
 )
-from pace_earthcare_matchups.path_utils import PATH_DATA, get_path
+from pace_earthcare_matchups.path_utils import PATH_DATA, PATH_TOKEN, get_path
 from pace_earthcare_matchups.supported_products import (
     EARTHCARE_SHORTNAMES,
     PACE_SHORTNAMES,
@@ -190,31 +190,25 @@ class Matchup:
             ).astype(float)
             reorder_latlon_l2 = (
                 data_pace.processing_version <= "3.1"
-                and self.shortname_pace
-                in [
-                    "PACE_OCI_L2_AOP",
-                    "PACE_OCI_L2_BGC",
-                    "PACE_OCI_L2_IOP",
-                    "PACE_OCI_L2_LANDVI",
-                    "PACE_OCI_L2_PAR",
-                    "PACE_OCI_L2_SFREFL",
-                ]
+                and self.shortname_pace.startswith("PACE_OCI_L2_")
             )
             if reorder_latlon_l2:
                 poly_arr = poly_arr[..., ::-1]
             return correct_polygon(Polygon(poly_arr))
-        elif self.shortname_pace == "PACE_HARP2_L1B_SCI":
-            idx_nadir = get_nadir_idx_harp2_l1b(data_pace)
-            lat = data_pace["geolocation_data/latitude"][idx_nadir].filled(
-                fill_value=np.nan
-            )
-            lon = data_pace["geolocation_data/longitude"][idx_nadir].filled(
-                fill_value=np.nan
-            )
+        else:
+            if self.shortname_pace == "PACE_HARP2_L1B_SCI":
+                idx_nadir = get_nadir_idx_harp2_l1b(data_pace)
+                lat = data_pace["geolocation_data/latitude"][idx_nadir].filled(
+                    fill_value=np.nan
+                )
+                lon = data_pace["geolocation_data/longitude"][idx_nadir].filled(
+                    fill_value=np.nan
+                )
+            else:
+                lat = data_pace["geolocation_data/latitude"][()].filled(fill_value=np.nan)
+                lon = data_pace["geolocation_data/longitude"][()].filled(fill_value=np.nan)
             latlon_ring = get_outer_ring(np.stack([lon, lat], axis=-1))
             return correct_polygon(Polygon(latlon_ring))
-        else:
-            raise NotImplementedError
 
 
 def get_meta_matchup_from_granule(
@@ -362,14 +356,12 @@ def get_matchup_mask(
 
 def get_matchup(
     meta_matchup: MetaMatchup,
-    long_term_token: str,
 ) -> tuple[Matchup, list[Path]]:
     """Get a matchup from a metadata matchup. Downloads the associated EarthCARE and
     PACE data, then get the mask describing their overlap.
 
     Args:
         meta_matchup: A metadata matchup.
-        long_term_token: A long term token to the ESA MAAP.
 
     Returns:
         matchup: The matchup derived from the provided metadata matchup.
@@ -382,7 +374,6 @@ def get_matchup(
         if not path_earthcare.exists():
             download_earthcare_item(
                 item=meta_match.item,
-                long_term_token=long_term_token,
                 datadir=path_earthcare.parent,
             )
             paths_added.append(path_earthcare)
@@ -440,8 +431,6 @@ def get_matchup(
 
 
 def get_matchups(
-    client_esa: Client,
-    long_term_token: str,
     shortname_pace: str,
     shortnames_earthcare: list[str],
     temporal: tuple[datetime, datetime],
@@ -462,8 +451,6 @@ def get_matchups(
     saves the matchup data to disk.
 
     Args:
-        client_esa: pySTAC client to access ESA data.
-        long_term_token: A long term token to the ESA MAAP.
         shortname_pace: PACE collection short name.
         shortnames_earthcare: EarthCARE collection short names.
         temporal: The time range in which to retrieve data. Times are assumed to be UTC.
@@ -495,17 +482,24 @@ def get_matchups(
         bbox=bbox,
         limit=search_batch_size,
     )
+    client_esa = Client.open("https://catalog.maap.eo.esa.int/catalogue/")
 
     time_start = temporal[0]
     matches = []
     while len(results_pace) > 0:
         if verbose:
-            t_start_str = datetime.strftime(results_pace[0].beginning_datetime, "%Y-%m-%d|%H:%M:%S")
-            t_end_str = datetime.strftime(results_pace[-1].ending_datetime, "%Y-%m-%d|%H:%M:%S")
+            t_start_str = datetime.strftime(
+                results_pace[0].beginning_datetime, "%Y-%m-%d|%H:%M:%S"
+            )
+            t_end_str = datetime.strftime(
+                results_pace[-1].ending_datetime, "%Y-%m-%d|%H:%M:%S"
+            )
             print(f"{len(matches)}/{limit} matches so far.")
-            print(f"Batch of {len(results_pace)} new {shortname_pace} results found "
-                  f"from {t_start_str} -> {t_end_str}.")
-            pbar = tqdm(results_pace, desc=f"Searching batch")
+            print(
+                f"Batch of {len(results_pace)} new {shortname_pace} results found "
+                f"from {t_start_str} -> {t_end_str}."
+            )
+            pbar = tqdm(results_pace, desc="Searching batch")
         else:
             pbar = results_pace
         for result_pace in pbar:
@@ -518,7 +512,7 @@ def get_matchups(
                 time_offset=time_offset,
             )
             if meta_match:
-                match, paths_added = get_matchup(meta_match, long_term_token)
+                match, paths_added = get_matchup(meta_match)
                 if filter_fn is None or filter_fn(match):
                     if save:
                         match.save()
@@ -547,7 +541,6 @@ def get_matchups(
 def load_matchup(
     filepath: Path,
     download_missing: bool = False,
-    long_term_token: str | None = None,
     client_esa: Client | None = None,
     shortnames_earthcare: list[str] | None = None,
 ) -> Matchup:
@@ -561,8 +554,10 @@ def load_matchup(
     parts = filepath.parts
     instrument_pace, level_pace = parts[-2].split("_")
     filestem_pace = parts[-1]
-    shortname_pace = get_pace_shortname(instrument_pace, level_pace)
-    filepath_pace = PATH_DATA / "PACE" / instrument_pace / level_pace / f"{filestem_pace}.nc"
+    shortname_pace = get_pace_shortname(instrument_pace, level_pace, filestem_pace)
+    filepath_pace = (
+        PATH_DATA / "PACE" / instrument_pace / level_pace / f"{filestem_pace}.nc"
+    )
     if download_missing and not filepath_pace.exists():
         download_missing_pace_data(filepath_pace)
 
@@ -570,21 +565,22 @@ def load_matchup(
     if shortnames_earthcare:
         products_ec = [p for p in products_ec if p in shortnames_earthcare]
 
+    long_term_token = open(PATH_TOKEN).read()
     matches_earthcare = []
     for prod in products_ec:
         filepaths_mask = sorted((filepath / prod).glob("*"))
         for fp in filepaths_mask:
             filepath_earthcare = PATH_DATA / "EarthCARE" / prod / f"{fp.stem}.h5"
             if download_missing and not filepath_earthcare.exists():
-                if not isinstance(long_term_token, str):
-                    raise ValueError("You must provide a long_term_token to download missing EarthCARE data!")
-                if not isinstance(client_esa, Client):
-                    raise ValueError("You must provide a pystac Client to download missing EarthCARE data!")
-                download_missing_earthcare_data(filepath_earthcare, long_term_token, client_esa)
-            matches_earthcare.append(MatchEarthcare(
-                filepath_earthcare=filepath_earthcare,
-                mask=np.load(fp, allow_pickle=False),
-            ))
+                assert isinstance(long_term_token, str)
+                assert isinstance(client_esa, Client)
+                download_missing_earthcare_data(filepath_earthcare, client_esa)
+            matches_earthcare.append(
+                MatchEarthcare(
+                    filepath_earthcare=filepath_earthcare,
+                    mask=np.load(fp, allow_pickle=False),
+                )
+            )
     return Matchup(
         filepath_pace=filepath_pace,
         shortname_pace=shortname_pace,
@@ -597,14 +593,20 @@ def delete_matchup(
     delete_associated_files: bool = False,
 ) -> None:
     """TODO
-    
+
     Warning: If you have any other data stored in the matchup path, it will be
     deleted too! For this reason it is highly suggested not to store data in
     the matchups data directory.
 
     TODO
     """
-    matchup_path = PATH_DATA / "matchups" / "_".join(matchup.filepath_pace.parts[-3:-1]) / matchup.filepath_pace.stem
+    matchup_path = (
+        PATH_DATA
+        / "matchups"
+        / matchup.filepath_pace.parts[-3]
+        / matchup.filepath_pace.parts[-2]
+        / matchup.filepath_pace.stem
+    )
     shutil.rmtree(matchup_path)
     if not delete_associated_files:
         return

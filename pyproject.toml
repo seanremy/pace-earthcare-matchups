@@ -7,21 +7,17 @@ dependencies = [
     "earthaccess",
     "h5py",
     "jupyter",
+    "jupytext",
     "maap-py",
     "matplotlib",
     "netCDF4",
     "numpy",
     "pystac",
     "pystac_client",
+    "scipy",
     "seaborn",
     "shapely",
     "tqdm",
-]
-
-[project.optional-dependencies]
-# packages required for maintainers
-maintainer = [
-  "jupytext",
 ]
 
 [tool.pyright]

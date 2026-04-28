@@ -13,7 +13,7 @@ from pystac.client import Client
 from pystac.item import Item
 from tqdm.notebook import tqdm
 
-from pace_earthcare_matchups.path_utils import get_path
+from pace_earthcare_matchups.path_utils import get_path, PATH_TOKEN
 
 
 def get_short_term_token(long_term_token: str) -> str:
@@ -42,12 +42,11 @@ def get_short_term_token(long_term_token: str) -> str:
     return access_token
 
 
-def download_earthcare_item(item: Item, long_term_token: str, datadir: Path) -> Path:
+def download_earthcare_item(item: Item, datadir: Path) -> Path:
     """Download the EarthCARE file described by the provided STAC item.
 
     Args:
         item: STAC entry corresponding to an EarthCARE file.
-        long_term_token: Long-term ESA MAAP token.
         datadir: Directory into which the EarthCARE file will be downloaded.
 
     Returns:
@@ -64,6 +63,7 @@ def download_earthcare_item(item: Item, long_term_token: str, datadir: Path) -> 
     path_outfile = datadir / filename
     if path_outfile.exists():
         return path_outfile
+    long_term_token = open(PATH_TOKEN).read().rstrip("\n")
     response = requests.get(
         url_h5,
         headers={"Authorization": f"Bearer {get_short_term_token(long_term_token)}"},
@@ -147,11 +147,10 @@ def parse_earthcare_filename(filename: str | Path) -> EarthcareNameData:
 
 def download_missing_earthcare_data(
     filepath: Path,
-    long_term_token: str,
     client_esa: Client,
 ) -> None:
     ec_namedata = parse_earthcare_filename(filepath)
-    
+
     time_window = (
         ec_namedata.val_start + timedelta(seconds=1),
         ec_namedata.val_start + timedelta(seconds=2),
@@ -170,6 +169,5 @@ def download_missing_earthcare_data(
     assert filepath.stem == items[0].id.removeprefix("ECA_")
     download_earthcare_item(
         item=items[0],
-        long_term_token=long_term_token,
         datadir=get_path(items[0]).parent,
     )

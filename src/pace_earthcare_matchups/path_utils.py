@@ -5,7 +5,7 @@ from pystac.item import Item
 
 PATH_ROOT = (Path(__file__) / ".." / ".." / "..").resolve()
 PATH_DATA = Path(os.getenv("PACE_EARTHCARE_DATA_PATH", PATH_ROOT / "data")).resolve()
-PATH_TOKEN = (PATH_ROOT / "token.txt").resolve()
+PATH_TOKEN = Path(os.getenv("ESA_MAAP_TOKEN_PATH", PATH_ROOT / "token.txt")).resolve()
 
 
 def get_path(obj: object) -> Path:
