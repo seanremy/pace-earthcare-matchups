@@ -30,6 +30,7 @@ SHORT_NAME_REPLACEMENTS = {
 
 
 def _earthaccess_login():
+    """Log in to earthaccess, using a MAAP token if running in a MAAP environment."""
     if "MAAP_PGT" in os.environ:
         maap = MAAP(maap_host="api.maap-project.org")
         acc_info = maap.profile.account_info()
@@ -39,12 +40,22 @@ def _earthaccess_login():
 
 
 class Granule:
-    """Granule serves as a generic representation of the relevant metadata from either a
-    MAAP or an earthaccess result describing a PACE granule. Both tools query the CMR,
-    so the underlying metadata is similar.
+    """Generic representation of the relevant metadata from either a MAAP or an
+    earthaccess result describing a PACE granule.
+
+    Both tools query the CMR, so the underlying metadata is similar. After construction,
+    instances expose: ``short_name``, ``beginning_datetime``, ``ending_datetime``,
+    ``filepath``, and ``geospatial_bounds``.
     """
 
     def __init__(self, result: MAAPGranule | DataGranule):
+        """Initialize a Granule from a MAAP or earthaccess result.
+
+        :param result: A granule result from either ``maap.Result.Granule`` or
+            ``earthaccess.results.DataGranule``.
+        :raises TypeError: If ``result`` is neither a ``MAAPGranule`` nor a
+            ``DataGranule``.
+        """
         if isinstance(result, MAAPGranule):
             # short name
             self.short_name = result["Granule"]["Collection"]["ShortName"]
@@ -128,7 +139,11 @@ class Granule:
                 f"Result of type {type(result)} is neither `maap.Result.Granule` nor `earthaccess.results.DataGranule`!"
             )
 
-    def download(self):
+    def download(self) -> None:
+        """Download this granule's data file to its expected local path.
+
+        Does nothing if the file already exists.
+        """
         if not self.filepath.exists():
             os.makedirs(self.filepath.parent, exist_ok=True)
             self._download()
@@ -140,7 +155,17 @@ def _query_cmr(
     limit: int,
     bbox: tuple[float, float, float, float] = (-180, -90, 180, 90),
 ) -> list[Granule]:
-    """TODO remove underscore, document"""
+    """Query the NASA CMR for PACE granules matching the given filters.
+
+    Uses MAAP by default, or earthaccess if the environment variable
+    ``PACE_EARTHCARE_MATCHUPS_USE_EARTHACCESS`` is set to ``"1"``.
+
+    :param short_name: PACE collection short name.
+    :param temporal: Time range as a (start, end) tuple of datetimes.
+    :param limit: Maximum number of granules to return.
+    :param bbox: Lat/lon bounding box in W, S, E, N order.
+    :returns: List of Granule objects matching the search criteria.
+    """
     use_earthaccess = bool(
         int(os.getenv("PACE_EARTHCARE_MATCHUPS_USE_EARTHACCESS", "0"))
     )
@@ -171,12 +196,9 @@ def _query_cmr(
 def get_simultaneous_pace_product(granule: Granule, shortname_pace: str) -> Granule:
     """Using one PACE granule, get a different product with the same timestamp.
 
-    Args:
-        granule: A PACE granule's MAAP metadata.
-        shortname_pace: The shortname of a different PACE product to retrieve.
-
-    Returns:
-        result: MAAP metadata of a PACE granule co-occurring with the provided granule.
+    :param granule: A PACE granule's metadata.
+    :param shortname_pace: The short name of a different PACE product to retrieve.
+    :returns: Metadata of a PACE granule co-occurring with the provided granule.
     """
     result = _query_cmr(
         short_name=shortname_pace,
@@ -194,11 +216,9 @@ def get_simultaneous_pace_product(granule: Granule, shortname_pace: str) -> Gran
 def get_nadir_idx_harp2_l1b(data_pace: netCDF4.Dataset) -> int:
     """Get the index of the smallest absolute viewing angle in HARP2 L1B data.
 
-    Args:
-        data_pace: A HARP2 L1B data file.
-
-    Returns:
-        idx_nadir: Index of the smallest absolute viewing angle.
+    :param data_pace: An open HARP2 L1B netCDF4 dataset.
+    :returns: Index into the sensor view angle dimension corresponding to the nadir
+        (near-zero) viewing angle.
     """
     view_angle = data_pace["sensor_views_bands/sensor_view_angle"]
     idx_nadir = np.argmin(np.abs(view_angle))
@@ -206,7 +226,14 @@ def get_nadir_idx_harp2_l1b(data_pace: netCDF4.Dataset) -> int:
 
 
 def get_pace_shortname(instrument: str, level: str, filestem: str) -> str:
-    """TODO"""
+    """Construct a PACE collection short name from instrument, level, and file stem.
+
+    :param instrument: Instrument identifier (e.g., ``"OCI"``, ``"HARP2"``).
+    :param level: Processing level string (e.g., ``"L1B"``, ``"L2"``).
+    :param filestem: File stem (without extension) of the PACE granule.
+    :returns: PACE collection short name (e.g., ``"PACE_OCI_L2_AOP"``).
+    :raises ValueError: If the level is not ``"L1"`` or ``"L2"``.
+    """
     shortname_pace = f"PACE_{instrument}_{level}"
     if level[1] == "1":
         shortname_pace += "_SCI"
@@ -234,11 +261,9 @@ class PaceNameData:
 def parse_pace_filename(filename: str | Path) -> PaceNameData:
     """Parse a PACE filename or filepath.
 
-    Args:
-        filename: Name of or path to a PACE file.
-
-    Returns:
-        pace_namedata: Description of the PACE file name.
+    :param filename: Name of or path to a PACE file.
+    :returns: Parsed components of the PACE file name.
+    :raises ValueError: If conflicting product or version fields are found in the stem.
     """
     stem = filename if isinstance(filename, str) else filename.stem
     stem_list = [s for s in stem.split(".") if s != ""]
@@ -270,6 +295,13 @@ def parse_pace_filename(filename: str | Path) -> PaceNameData:
 
 
 def download_missing_pace_data(filepath: Path) -> None:
+    """Download a PACE file if it is not present at the expected local path.
+
+    Searches for the file in the NASA CMR using the filename metadata and downloads
+    it to the appropriate local directory.
+
+    :param filepath: Expected local path of the PACE file.
+    """
     pace_namedata = parse_pace_filename(filepath)
     shortname = get_pace_shortname(
         pace_namedata.instrument, pace_namedata.level, filepath.stem

@@ -19,14 +19,13 @@ from pace_earthcare_matchups.pace import Granule
 def geometry_from_item(
     item: Item,
 ) -> LineString | MultiLineString | Polygon | MultiPolygon:
-    """Get bounding geometry from an EarthCARE STAC item (metadata). EarthCARE bounds
-    may be either a linestring, polygon, or multipolygon.
+    """Get bounding geometry from an EarthCARE STAC item (metadata).
 
-    Args:
-        item: STAC item describing an EarthCARE file.
+    EarthCARE bounds may be either a line string, polygon, or multipolygon.
 
-    Returns:
-        geom: The geospatial bounds of an EarthCARE file.
+    :param item: STAC item describing an EarthCARE file.
+    :returns: The geospatial bounds of the EarthCARE file.
+    :raises ValueError: If the geometry type is not ``LineString`` or ``Polygon``.
     """
     #
     assert item.geometry
@@ -41,14 +40,13 @@ def geometry_from_item(
 
 
 def get_intersection_bbox(granule_pace: Granule, item_earthcare: Item) -> Polygon:
-    """Get latlon bbox of PACE/EarthCARE metadata intersection.
+    """Get the lat/lon bounding box of the PACE/EarthCARE metadata intersection.
 
-    Args:
-        granule_pace: A PACE granule's metadata.
-        item_earthcare: STAC item describing an EarthCARE file.
-
-    Returns:
-        bbox: The bounding box of the PACE / EarthCARE metadata intersection.
+    :param granule_pace: A PACE granule's metadata.
+    :param item_earthcare: STAC item describing an EarthCARE file.
+    :returns: Axis-aligned bounding box of the intersection between the PACE granule
+        and EarthCARE file geometries.
+    :raises TypeError: If the intersection geometry is not a supported type.
     """
     geom_earthcare = geometry_from_item(item_earthcare)
     inter = granule_pace.geospatial_bounds.intersection(geom_earthcare)
@@ -73,14 +71,13 @@ def get_datetime_range_from_granule(
 ) -> tuple[datetime, datetime]:
     """Get the datetime range of a PACE granule.
 
-    Args:
-        granule: A PACE granule's metadata.
-        padding: Padding to apply to the start and end of the datetime range. Positive
-            padding expands the range, negative padding shrinks the range.
-
-    Returns:
-        dt_start: Starting datetime of the range.
-        dt_end: Ending datetime of the range.
+    :param granule: A PACE granule's metadata.
+    :param padding: Padding to apply to the start and end of the datetime range.
+        Positive padding expands the range, negative padding shrinks it.
+    :returns: Tuple of (dt_start, dt_end), the padded start and end datetimes of the
+        granule's temporal range.
+    :raises ValueError: If the granule's start time is after its end time, or if
+        negative padding would invert the range.
     """
     if granule.beginning_datetime > granule.ending_datetime:
         raise ValueError("Start of datetime range must precede end of datetime range!")
