@@ -15,15 +15,15 @@ jobs:
       - uses: actions/setup-python@v5
       - name: Install dependencies
         run: |
-          pip --group docs .
+          pip install --group docs .
       - name: Sphinx build
         run: |
           sphinx-build -M html docs/source/ docs/build/
       - name: Upload Pages artifact
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/docstrings' }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs/build/html
       - name: Deploy to GitHub Pages
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/docstrings' }}
         uses: actions/deploy-pages@v4
