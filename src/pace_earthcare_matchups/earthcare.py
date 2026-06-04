@@ -9,6 +9,9 @@ import os
 from pathlib import Path
 import requests
 
+import h5py
+import numpy as np
+import numpy.typing as npt
 from pystac.client import Client
 from pystac.item import Item
 from tqdm.notebook import tqdm
@@ -180,3 +183,42 @@ def download_missing_earthcare_data(
         item=items[0],
         datadir=get_path(items[0]).parent,
     )
+
+
+def get_earthcare_latlon(filepath: Path) -> tuple[
+    npt.NDArray[np.float32 | np.float64],
+    npt.NDArray[np.float32 | np.float64],
+]:
+    """Get the latitude and longitude arrays from an EarthCARE file.
+
+    :param filepath: Path to the EarthCARE file.
+    :returns: Tuple of (latitude array, longitude array).
+    """
+    data_earthcare = h5py.File(filepath)
+    science_data = data_earthcare["ScienceData"]
+    assert isinstance(science_data, h5py.Group)
+    if "latitude" in science_data:
+        lat_earthcare = science_data["latitude"]
+        lon_earthcare = science_data["longitude"]
+    elif "sample_latitude" in science_data:
+        lat_earthcare = science_data["sample_latitude"]
+        lon_earthcare = science_data["sample_longitude"]
+    elif "barycentre_latitude" in science_data:
+        lat_earthcare = science_data["barycentre_latitude"]
+        lon_earthcare = science_data["barycentre_longitude"]
+    elif "Geo" in science_data:
+        lat_earthcare = science_data["Geo/latitude"]
+        lon_earthcare = science_data["Geo/longitude"]
+    else:
+        product_name = parse_earthcare_filename(filepath).get_file_type()
+        raise NotImplementedError(f"Don't know how to parse EarthCARE product {product_name}!")
+    assert isinstance(lat_earthcare, h5py.Dataset)
+    assert isinstance(lon_earthcare, h5py.Dataset)
+    lat = lat_earthcare[()]
+    lon = lon_earthcare[()]
+    if hasattr(lat_earthcare, "fillvalue"):
+        assert hasattr(lon_earthcare, "fillvalue")
+        fillvalue = lat_earthcare.fillvalue
+        lat[lat == fillvalue] = np.nan
+        lon[lon == fillvalue] = np.nan
+    return lat, lon

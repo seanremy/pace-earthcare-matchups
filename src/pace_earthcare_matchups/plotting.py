@@ -5,6 +5,8 @@ from pathlib import Path
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from cartopy.mpl.geoaxes import GeoAxes
+from matplotlib.figure import Figure
+import matplotlib.font_manager as fm
 import matplotlib.lines
 import matplotlib.patches
 import matplotlib.pyplot as plt
@@ -60,9 +62,13 @@ def get_best_longitude_shift(matchups: list[Matchup]) -> float:
 
 def plot_matchups(
     matchups: list[Matchup],
+    title: str | None = "PACE / EarthCARE Matchups",
     figsize: tuple[int, int] | None = None,
     fig_filepath: Path | str | None = None,
-) -> None:
+    title_prop: fm.FontProperties | None = None,
+    leg_prop: fm.FontProperties | None = None,
+    pdf: bool = False,
+) -> Figure:
     """Plot a list of matchups on a map and optionally save the figure to file.
 
     Each PACE granule and its matched EarthCARE swaths are drawn with a consistent
@@ -73,11 +79,16 @@ def plot_matchups(
     :param figsize: Size of the matplotlib figure as an (x, y) tuple.
     :param fig_filepath: If provided, saves the figure to this path. Should end
         in ``".png"``.
+    :param title_prop: Font properties for the title text.
+    :param leg_prop: Font properties for the legend text.
+    :param pdf: If True, also saves the figure as a PDF with the same name.
+    :returns: The matplotlib figure object containing the plot.
     """
     if isinstance(fig_filepath, str):
         fig_filepath = Path(fig_filepath)
     lon_shift = get_best_longitude_shift(matchups)
-    ax = plt.figure(figsize=figsize).add_subplot(
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(
         projection=ccrs.PlateCarree(central_longitude=lon_shift)
     )
     assert isinstance(ax, GeoAxes)
@@ -153,6 +164,7 @@ def plot_matchups(
                     color=palette[label],
                     linewidth=2,
                     label=label,
+                    linestyle="dashed",
                 )[0]
             elif isinstance(geom, Polygon):
                 coords_geom = np.array(geom.exterior.coords)
@@ -186,11 +198,18 @@ def plot_matchups(
             plot_elements[label_earthcare] = _plot_bounds(
                 bounds_earthcare, label_earthcare
             )
-    ax.set_title("PACE / EarthCARE Matchups")
-    ax.legend(handles=[e[1] for e in sorted(plot_elements.items(), key=lambda i: i[0])])
+    if title:
+        ax.set_title(title, fontproperties=title_prop)
+    ax.legend(handles=[e[1] for e in sorted(plot_elements.items(), key=lambda i: i[0])],
+              prop=leg_prop)
     ax.set_xlim(max(-180, minlon - 5), min(180, maxlon + 5))
     
     ax.set_ylim(max(-90, minlat - 5), min(90, maxlat + 5))
 
     if fig_filepath:
-        plt.savefig(fig_filepath, dpi=200, bbox_inches="tight")
+        if pdf:
+            plt.savefig(fig_filepath.with_suffix(".pdf"), bbox_inches="tight", format="pdf")
+        else:
+            plt.savefig(fig_filepath, dpi=200, bbox_inches="tight")
+
+    return fig
