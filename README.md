@@ -70,6 +70,9 @@ Notebooks in PEM are saved as [MyST markdown](https://mystmd.org/). You can conv
 jupytext --to notebook notebooks/tutorial.md
 ```
 
+## Documentation
+
+[API documentation](https://seanremy.github.io/pace-earthcare-matchups/) is a work in progress.
 
 ## What next?
 This repository is very new, and still under construction. Some features to look forward to:
