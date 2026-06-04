@@ -3,7 +3,7 @@ filenames.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from dateutil import parser
 import os
 from pathlib import Path
@@ -19,12 +19,27 @@ from tqdm.notebook import tqdm
 from pace_earthcare_matchups.path_utils import get_path, PATH_TOKEN
 
 
-def get_short_term_token(long_term_token: str) -> str:
+def get_short_term_token() -> str:
     """Get a short-term ESA MAAP token using your long-term token.
 
-    :param long_term_token: Long-term ESA MAAP token.
     :returns: A short-term ESA MAAP token.
     """
+    # check for expiration time of the long-term token
+    modtime = datetime.fromtimestamp(os.path.getmtime(PATH_TOKEN), UTC)
+    time_until_expiration = timedelta(days=90) - (datetime.now(UTC) - modtime)
+    if time_until_expiration < timedelta():
+        raise RuntimeError(
+            f"Long-term ESA MAAP token at {PATH_TOKEN} has expired! Please get a new "
+            "long-term token from "
+            "https://portal.maap.eo.esa.int/ini/services/auth/token/"
+        )
+    elif time_until_expiration < timedelta(days=7):
+        print(
+            f"Warning: Long-term ESA MAAP token at {PATH_TOKEN} will expire in "
+            f"{time_until_expiration.days} days. You can get a new long-term token "
+            "from https://portal.maap.eo.esa.int/ini/services/auth/token/"
+        )
+    long_term_token = open(PATH_TOKEN).read().rstrip("\n")
     response = requests.post(
         "https://iam.maap.eo.esa.int/realms/esa-maap/protocol/openid-connect/token",
         data={
@@ -60,10 +75,9 @@ def download_earthcare_item(item: Item, datadir: Path) -> Path:
     path_outfile = datadir / filename
     if path_outfile.exists():
         return path_outfile
-    long_term_token = open(PATH_TOKEN).read().rstrip("\n")
     response = requests.get(
         url_h5,
-        headers={"Authorization": f"Bearer {get_short_term_token(long_term_token)}"},
+        headers={"Authorization": f"Bearer {get_short_term_token()}"},
         stream=True,
     )
     response.raise_for_status()
