@@ -1,0 +1,30 @@
+name: documentation
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install --group docs .
+      - name: Sphinx build
+        run: |
+          sphinx-build -M html docs/source/ docs/build/
+      - name: Upload Pages artifact
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/docstrings' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/build/html
+      - name: Deploy to GitHub Pages
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/docstrings' }}
+        uses: actions/deploy-pages@v4

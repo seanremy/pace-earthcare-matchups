@@ -23,7 +23,14 @@ from pace_earthcare_matchups.matchup import Matchup
 
 
 def get_best_longitude_shift(matchups: list[Matchup]) -> float:
-    """For a list of matchups, compute the longitude shift which 
+    """Compute the longitude shift that best centers a list of matchups in a plot.
+
+    Finds the largest gap in the sorted longitude values across all matchup geometries
+    and places the antimeridian there, so the data is uninterrupted in the center of
+    the plot.
+
+    :param matchups: List of matchups whose PACE and EarthCARE bounds are considered.
+    :returns: Longitude shift in degrees to apply as the central longitude of the plot.
     """
     # flatten all geometries into a single array of longitudes
     lon = []
@@ -41,13 +48,13 @@ def get_best_longitude_shift(matchups: list[Matchup]) -> float:
     diffs = np.concatenate([np.diff(lon), [lon[0] + 360 - lon[-1]]])
     # find the largest jump
     idx_jump = np.argmax(diffs)
-    # determine the antemeridian
+    # determine the antimeridian
     if idx_jump == diffs.shape[0] - 1:
         # "edge case" where 180 already separates the data
-        antemeridian = (lon[-1] + lon[0]) / 2 % 360 - 180
+        antimeridian = (lon[-1] + lon[0]) / 2 % 360 - 180
     else:
-        antemeridian = (lon[idx_jump] + lon[idx_jump + 1]) / 2
-    lon_shift = antemeridian % 360 - 180
+        antimeridian = (lon[idx_jump] + lon[idx_jump + 1]) / 2
+    lon_shift = antimeridian % 360 - 180
     return lon_shift.item()
 
 
@@ -56,13 +63,16 @@ def plot_matchups(
     figsize: tuple[int, int] | None = None,
     fig_filepath: Path | str | None = None,
 ) -> None:
-    """Plot a list of matchups and optionally save the figure to file.
+    """Plot a list of matchups on a map and optionally save the figure to file.
 
-    Args:
-        matchups: List of matchups to be plotted.
-        figsize: Size of the matplotlib figure as an (x, y) tuple.
-        fig_filepath: If provided, saves the figure to this path. Should end in ".png".
-        central_longitude: Central longitude of the created plot. Default: 0.
+    Each PACE granule and its matched EarthCARE swaths are drawn with a consistent
+    color palette. The central longitude is chosen automatically to avoid splitting
+    the data across the antimeridian.
+
+    :param matchups: List of matchups to be plotted.
+    :param figsize: Size of the matplotlib figure as an (x, y) tuple.
+    :param fig_filepath: If provided, saves the figure to this path. Should end
+        in ``".png"``.
     """
     if isinstance(fig_filepath, str):
         fig_filepath = Path(fig_filepath)
@@ -95,6 +105,10 @@ def plot_matchups(
     minlon, maxlon = np.inf, -np.inf
 
     def _update_extent(coords: npt.NDArray):
+        """Expand the tracked lat/lon extent to include the given coordinate array.
+
+        :param coords: Array of (longitude, latitude) coordinate pairs of shape (N, 2).
+        """
         nonlocal minlat, maxlat, minlon, maxlon
         minlat = min(minlat, np.min(coords[..., 1]))
         maxlat = max(maxlat, np.max(coords[..., 1]))
@@ -105,6 +119,12 @@ def plot_matchups(
     def _plot_bounds(
         bounds: LineString | MultiLineString | Polygon | MultiPolygon, label: str
     ) -> matplotlib.lines.Line2D | matplotlib.patches.Polygon:
+        """Plot a geometry's bounds on the axes and return the plot element.
+
+        :param bounds: Geometry to plot, in (longitude, latitude) order.
+        :param label: Legend label for the plotted element.
+        :returns: The matplotlib artist added to the axes.
+        """
         geoms = []
         if isinstance(bounds, MultiPolygon):
             assert len(bounds.geoms) == 2

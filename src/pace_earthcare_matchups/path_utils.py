@@ -9,17 +9,16 @@ PATH_TOKEN = Path(os.getenv("ESA_MAAP_TOKEN_PATH", PATH_ROOT / "token.txt")).res
 
 
 def get_path(obj: object) -> Path:
-    """Get the local path of a serializable object. Serializable objects have uniform
-    specifications defined here for their paths, up to a root folder. The root folder
-    defaults to "{repo_root}/data", or can be configured with the environment variable
-    "PACE_EARTHCARE_DATA_PATH".
+    """Get the local path of a serializable object.
 
-    Args:
-        obj: An object of a type that has a specification for paths, currently only
-            Granule and Item.
+    Serializable objects have uniform path specifications defined here, relative to a
+    configurable root folder. The root folder defaults to ``{repo_root}/data``, or can
+    be set via the ``PACE_EARTHCARE_DATA_PATH`` environment variable.
 
-    Returns:
-        path: Local path of the object.
+    :param obj: An object whose local path should be resolved. Currently supports
+        ``pystac.item.Item`` (EarthCARE) and any object with a ``filepath`` attribute
+        e.g., ``Granule`` (PACE).
+    :returns: Local path of the object.
     """
     if isinstance(obj, Item):
         product_type = obj.properties["product:type"]

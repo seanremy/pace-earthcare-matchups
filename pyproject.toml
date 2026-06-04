@@ -20,6 +20,12 @@ dependencies = [
     "tqdm",
 ]
 
+[dependency-groups]
+docs = [
+  "sphinx",
+  "sphinx-rtd-theme",
+]
+
 [tool.pyright]
 typeCheckingMode = "standard"
 include = ["src"]

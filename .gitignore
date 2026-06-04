@@ -20,3 +20,6 @@ data
 
 # Mac
 **.DS_Store
+
+# documentation
+docs/build

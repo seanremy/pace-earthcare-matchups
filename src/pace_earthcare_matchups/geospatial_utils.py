@@ -35,20 +35,18 @@ def vincenty_distance(
 ]:
     """Compute geodesic distance using Vincenty's formulae and the WGS-84 ellipsoid.
 
-    See: https://en.wikipedia.org/wiki/Vincenty%27s_formulae#Inverse_problem
-    Args:
-        latlon1: Starting points' latitudes and longitudes as a numpy array of
-            shape (2, N).
-        latlon2: Destination points' latitudes and longitudes as a numpy array
-            of shape (2, N).
-        tol: Tolerance in meters. When the updates are less than tol, the
-            iteration ends (default: 1e-12).
-        max_iters: Maximum number of iterations to perform.
+    See https://en.wikipedia.org/wiki/Vincenty%27s_formulae#Inverse_problem
 
-    Returns:
-        s: Geodesic distance in meters between provided points.
-        alpha1: Forward azimuths at starting points.
-        alpha2: Forward azimuths at destination points.
+    :param latlon1: Starting points' latitudes and longitudes as a numpy array of
+        shape (2, N).
+    :param latlon2: Destination points' latitudes and longitudes as a numpy array
+        of shape (2, N).
+    :param tol: Tolerance in meters. When the updates are less than tol, the
+        iteration ends (default: 1e-12).
+    :param max_iters: Maximum number of iterations to perform.
+    :returns: Tuple of (s, alpha1, alpha2) where s is the geodesic distance in meters
+        between provided points, alpha1 is forward azimuths at starting points, and
+        alpha2 is forward azimuths at destination points.
     """
     assert isinstance(latlon1, np.ndarray) and latlon1.dtype == np.float64
     assert isinstance(latlon2, np.ndarray) and latlon2.dtype == np.float64
@@ -148,20 +146,18 @@ def vincenty_point_along_geodesic(
     """Compute destination locations along geodesics defined by starting locations,
     azimuth angles, and distances.
 
-    See: https://en.wikipedia.org/wiki/Vincenty%27s_formulae#Direct_problem
+    See https://en.wikipedia.org/wiki/Vincenty%27s_formulae#Direct_problem
 
-    Args:
-        latlon1: Starting points' latitudes and longitudes as a numpy array of shape
-            (2, N).
-        alpha1: Forward azimuths at initial points as a numpy array of shape (N,).
-        s: Distances to travel along the geodesics as a numpy array of shape (N,).
-        tol: Tolerance in meters. When the updates are less than tol, the
-            iteration ends (default: 1e-12).
-        max_iters: Maximum number of iterations to perform.
-
-    Returns:
-        latlon2: Estimated latitude and longitude as a numpy array of shape (2, N).
-        alpha2: Forward azimuths at destination points as a numpy array of shape(N,).
+    :param latlon1: Starting points' latitudes and longitudes as a numpy array of
+        shape (2, N).
+    :param alpha1: Forward azimuths at initial points as a numpy array of shape (N,).
+    :param s: Distances to travel along the geodesics as a numpy array of shape (N,).
+    :param tol: Tolerance in meters. When the updates are less than tol, the
+        iteration ends (default: 1e-12).
+    :param max_iters: Maximum number of iterations to perform.
+    :returns: Tuple of (latlon2, alpha2) where latlon2 is the estimated latitude and
+        longitude as a numpy array of shape (2, N), and alpha2 is forward azimuths
+        at destination points as a numpy array of shape (N,).
     """
     assert isinstance(latlon1, np.ndarray) and latlon1.dtype == np.float64
     assert isinstance(alpha1, np.ndarray) and alpha1.dtype == np.float64
@@ -264,17 +260,14 @@ def get_antimeridian_intersection(
     """Get the intersection between the great circle defined by two endpoints and the
     antimeridian (dateline) using Vincenty's formulae.
 
-    Args:
-        latlon1: Starting points' latitudes and longitudes as a numpy array of
-            shape (2, N).
-        latlon2: Destination points' latitudes and longitudes as a numpy array
-            of shape (2, N).
-        tol: Tolerance in meters. When the updates are less than tol, the
-            iteration ends (default: 1e-12).
-        max_iters: Maximum number of iterations to perform.
-
-    Returns:
-        lat_am: Latitude of the great circle's intersection with the antimeridian.
+    :param latlon1: Starting points' latitudes and longitudes as a numpy array of
+        shape (2, N).
+    :param latlon2: Destination points' latitudes and longitudes as a numpy array
+        of shape (2, N).
+    :param tol: Tolerance in meters. When the updates are less than tol, the
+        iteration ends (default: 1e-12).
+    :param max_iters: Maximum number of iterations to perform.
+    :returns: Latitude of the great circle's intersection with the antimeridian.
     """
     dists, alpha1, _ = vincenty_distance(latlon1, latlon2)
 
@@ -303,11 +296,8 @@ def correct_polygon(poly: Polygon) -> Polygon | MultiPolygon:
     antimeridian (dateline). Otherwise, if it crosses the antimeridian without including
     a pole, split it into two polygons, one on each side of the antimeridian.
 
-    Args:
-        poly: A polygon in (longitude, latitude) order.
-
-    Returns:
-        poly_correct: Corrected polygon / multipolygon.
+    :param poly: A polygon in (longitude, latitude) order.
+    :returns: Corrected polygon or multipolygon.
     """
     lonlat = np.array(poly.exterior.coords.xy)
     lon_jumps = np.where(np.abs(np.diff(lonlat[0])) > 180)[0]
@@ -386,11 +376,8 @@ def correct_linestring(line: LineString) -> LineString | MultiLineString:
     """Correct a geospatial line string. If it crosses the antimeridian (dateline),
     split it into two line strings, one on either side.
 
-    Args:
-        line: A line string in (longitude, latitude) order.
-
-    Returns:
-        line_correct: Corrected line string / multi-line string.
+    :param line: A line string in (longitude, latitude) order.
+    :returns: Corrected line string or multi-line string.
     """
     lonlat = np.array(line.coords.xy)
     lon_jumps = np.where(np.abs(np.diff(lonlat[0])) > 180)[0]
@@ -414,7 +401,13 @@ def correct_linestring(line: LineString) -> LineString | MultiLineString:
 
 
 def geom_to_coords(geom: LineString | MultiLineString | Polygon | MultiPolygon) -> npt.NDArray:
-    """TODO
+    """Extract coordinates from a Shapely geometry into a single numpy array.
+
+    For multi-geometries, coordinates from all component geometries are concatenated.
+    For polygons, only the exterior ring coordinates are returned.
+
+    :param geom: A Shapely geometry (LineString, MultiLineString, Polygon, or MultiPolygon).
+    :returns: Array of (longitude, latitude) coordinate pairs of shape (N, 2).
     """
     if isinstance(geom, LineString):
         return np.array(geom.coords)
@@ -432,16 +425,24 @@ def geom_to_coords(geom: LineString | MultiLineString | Polygon | MultiPolygon) 
     return np.concatenate(coords)
 
 
-def poly_shift(poly: Polygon, shift: float):
-    """TODO
+def poly_shift(poly: Polygon, shift: float) -> Polygon:
+    """Shift the longitudes of a polygon by the given amount, wrapping to [-180, 180].
+
+    :param poly: A Shapely polygon in (longitude, latitude) order.
+    :param shift: Longitude shift in degrees.
+    :returns: A new polygon with shifted longitudes.
     """
     coords = np.array(poly.exterior.coords)
     coords[:, 0] = (coords[:, 0] + 180 + shift) % 360 - 180
     return Polygon(coords)
 
 
-def line_shift(line: LineString, shift: float):
-    """TODO
+def line_shift(line: LineString, shift: float) -> LineString:
+    """Shift the longitudes of a line string by the given amount, wrapping to [-180, 180].
+
+    :param line: A Shapely line string in (longitude, latitude) order.
+    :param shift: Longitude shift in degrees.
+    :returns: A new line string with shifted longitudes.
     """
     coords = np.array(line.coords)
     coords[:, 0] = (coords[:, 0] + 180 + shift) % 360 - 180
@@ -452,20 +453,18 @@ def get_centered_latlon(
     lat: npt.NDArray[np.float32 | np.float64],
     lon: npt.NDArray[np.float32 | np.float64],
 ) -> tuple[float, float]:
-    """Get latitude and longitude arrays centered so that the mean longitude is 0.
+    """Get the central latitudes and longitudes of the provided arrays.
+
     To resolve ambiguity arising from the circularity of longitude, this function
     assumes the maximum range of longitudes when properly centered is less than 180.
     A robust solution for the longitude phase shift (which minimizes the range of
     values) requires a sorting of the flattened longitude array. For large arrays this
     is a bit slow, hence the simplifying assumption here.
 
-    Args:
-        lat: Latitude array.
-        lon: Longitude array.
-
-    Returns:
-        central_lat: Centered latitudes.
-        central_lon: Centered longitudes.
+    :param lat: Latitude array.
+    :param lon: Longitude array.
+    :returns: Tuple of (central_lat, central_lon), the mean latitude and mean longitude
+        of the provided arrays.
     """
     crosses_180 = (np.nanmax(lon) - np.nanmin(lon)) > 180
     if crosses_180:
@@ -483,12 +482,9 @@ def central_latlon_to_rot_mtx(
     """Get a rotation matrix from Earth-centered rotating to center on the specified
     latitude and longitude.
 
-    Args:
-        central_lat: Centered latitude, in degrees.
-        central_lon: Centered longitude, in degrees.
-
-    Returns:
-        rot_mtx: Rotation matrix.
+    :param central_lat: Central latitude, in degrees.
+    :param central_lon: Central longitude, in degrees.
+    :returns: 3x3 rotation matrix.
     """
     theta = -central_lon * np.pi / 180
     rot_mtx_z = np.array(
@@ -516,13 +512,10 @@ def get_centering_function(
     """Get a function that rotates subsequent lat/lon arrays to the central lat/lon of
     the provided lat/lon arrays.
 
-    Args:
-        lat: Latitude array, in degrees.
-        lon: Longitude array, in degrees.
-
-    Returns:
-        centering_function: Function that rotates lat/lon arrays to center on the
-            provided lat/lon array.
+    :param lat: Latitude array, in degrees.
+    :param lon: Longitude array, in degrees.
+    :returns: A callable that accepts (lat, lon) arrays and returns them rotated to
+        center on the central lat/lon of the provided arrays.
     """
     central_lat, central_lon = get_centered_latlon(lat, lon)
     rot_mtx = central_latlon_to_rot_mtx(central_lat, central_lon)[None]
@@ -534,6 +527,12 @@ def get_centering_function(
         npt.NDArray[np.float32 | np.float64],
         npt.NDArray[np.float32 | np.float64],
     ]:
+        """Rotate lat/lon arrays to be centered on the pre-computed central location.
+
+        :param lat: Latitude array, in degrees.
+        :param lon: Longitude array, in degrees.
+        :returns: Tuple of (lat_rot, lon_rot), the rotated latitude and longitude arrays.
+        """
         cos_lat = np.cos(np.radians(lat))
         cos_lon = np.cos(np.radians(lon))
         sin_lat = np.sin(np.radians(lat))
@@ -556,5 +555,12 @@ def get_centering_function(
 
 
 def get_outer_ring(arr: npt.NDArray) -> npt.NDArray:
-    """Get the outer ring in the first two dimensions of an array."""
+    """Get the outer ring in the first two dimensions of an array.
+
+    Traverses the border of the 2D grid clockwise: top row, right column,
+    bottom row (reversed), left column (reversed).
+
+    :param arr: Array of shape (M, N, ...) to extract the outer ring from.
+    :returns: Array of shape (2*(M+N)-4, ...) containing the outer ring elements.
+    """
     return np.concatenate([arr[0], arr[:, -1], arr[-1][::-1], arr[:, 0][::-1]])

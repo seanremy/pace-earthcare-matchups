@@ -65,10 +65,9 @@ from pace_earthcare_matchups.supported_products import (
 class MetaMatchEarthcare:
     """Represents the metadata of an EarthCARE file matched to a PACE file's metadata.
 
-    Args:
-        item: STAC item describing an EarthCARE file.
-        bbox: Bounding box where the EarthCARE bounding geometry intersects the parent
-            PACE granule's bounding geometry.
+    :param item: STAC item describing an EarthCARE file.
+    :param bbox: Bounding box where the EarthCARE bounding geometry intersects the parent
+        PACE granule's bounding geometry.
     """
 
     item: Item
@@ -79,9 +78,8 @@ class MetaMatchEarthcare:
 class MetaMatchup:
     """Represents a metadata match between a PACE and EarthCARE file.
 
-    Args:
-        granule_pace: A PACE granule's MAAP metadata.
-        matches_earthcare: List of EarthCARE metadata matched to the PACE granule.
+    :param granule_pace: A PACE granule's MAAP metadata.
+    :param matches_earthcare: List of EarthCARE metadata matched to the PACE granule.
     """
 
     granule_pace: Granule
@@ -92,9 +90,8 @@ class MetaMatchup:
 class MatchEarthcare:
     """Represents an EarthCARE file to which a PACE file was matched.
 
-    Args:
-        filepath_earthcare: Path of downloaded EarthCARE data.
-        mask: Mask into the data where it overlaps geospatially with PACE data.
+    :param filepath_earthcare: Path of downloaded EarthCARE data.
+    :param mask: Mask into the data where it overlaps geospatially with PACE data.
     """
 
     filepath_earthcare: Path
@@ -105,9 +102,9 @@ class MatchEarthcare:
     ) -> LineString | MultiLineString | Polygon | MultiPolygon:
         """Get the linestring or polygon bounds for this MatchEarthcare's data.
 
-        Args:
-            pts_per_side: Number of points per side in a polygon approximation of the
-                latitude/longitude bounds of 2D EarthCARE data.
+        :param pts_per_side: Number of points per side in a polygon approximation of the
+            latitude/longitude bounds of 2D EarthCARE data.
+        :returns: Geospatial bounds of the EarthCARE data as a line string or polygon.
         """
         data_earthcare = h5py.File(self.filepath_earthcare)
         lat_data = data_earthcare["ScienceData/latitude"]
@@ -153,9 +150,9 @@ class MatchEarthcare:
 class Matchup:
     """Represents a PACE file and a set of EarthCARE files which overlap with it.
 
-    Args:
-        filepath_pace: Path of downloaded PACE data.
-        matches_earthcare: A list of MatchEarthcare overlapping the PACE file.
+    :param filepath_pace: Path of downloaded PACE data.
+    :param shortname_pace: PACE collection short name.
+    :param matches_earthcare: A list of MatchEarthcare overlapping the PACE file.
     """
 
     filepath_pace: Path
@@ -163,7 +160,7 @@ class Matchup:
     matches_earthcare: list[MatchEarthcare]
 
     def save(self) -> None:
-        """Save this Matchup to file."""
+        """Save this Matchup's overlap masks to disk under the matchups data directory."""
         data_pace = netCDF4.Dataset(self.filepath_pace)
         pace_type = f"{data_pace.instrument}_{data_pace.processing_level}"
         stem_pace = self.filepath_pace.stem
@@ -176,7 +173,10 @@ class Matchup:
             np.save(mpath, match.mask, allow_pickle=False)
 
     def get_pace_bounds(self) -> Polygon | MultiPolygon:
-        """Get the polygon bounds for this Matchup's PACE data."""
+        """Get the polygon bounds for this Matchup's PACE data.
+
+        :returns: Geospatial bounds of the PACE data as a polygon or multipolygon.
+        """
         data_pace = netCDF4.Dataset(self.filepath_pace)
         if hasattr(data_pace, "geospatial_bounds"):
             poly_str = (
@@ -219,16 +219,13 @@ def get_meta_matchup_from_granule(
 ) -> MetaMatchup | None:
     """Get a metadata matchup from the provided PACE granule.
 
-    Args:
-        client_esa: pySTAC client to access ESA data.
-        granule_pace: A PACE granule's metadata.
-        shortnames_earthcare: List of EarthCARE collection short names.
-        time_offset: This offset will be subtracted from the start time and added to the
-            end time of the time range.
-
-    Returns:
-        meta_matchup: A metadata matchup with EarthCARE metadata overlapping the
-            provided PACE granule.
+    :param client_esa: pySTAC client to access ESA data.
+    :param granule_pace: A PACE granule's metadata.
+    :param shortnames_earthcare: List of EarthCARE collection short names.
+    :param time_offset: This offset will be subtracted from the start time and added to
+        the end time of the time range.
+    :returns: A metadata matchup with EarthCARE metadata overlapping the provided PACE
+        granule, or None if no overlapping EarthCARE data was found.
     """
     assert isinstance(shortnames_earthcare, list)
 
@@ -272,21 +269,17 @@ def get_matchup_mask(
     lat_ec: npt.NDArray[np.float32],
     lon_ec: npt.NDArray[np.float32],
 ) -> npt.NDArray:
-    """Get the mask of the overlap between PACE and EarthCARE lat/lon arrays. The mask
-    is in the shape of the provided PACE data. PACE data is expected to be a 2D array.
+    """Get the mask of the overlap between PACE and EarthCARE lat/lon arrays.
 
-    TODO: account for multi-angle L1B lat/lon arrays.
-    TODO: break into smaller functions.
+    The mask is in the shape of the provided EarthCARE data, indicating which EarthCARE
+    points fall within the PACE granule boundary. PACE data is expected to be a 2D array.
 
-    Args:
-        lat_pace: PACE latitude array.
-        lon_pace: PACE longitude array.
-        lat_ec: EarthCARE latitude array.
-        lon_ec: EarthCARE longitude array.
-
-    Returns:
-        ec_in_granule: Mask into the PACE data where it overlaps with the provided
-            EarthCARE data.
+    :param lat_pace: PACE latitude array.
+    :param lon_pace: PACE longitude array.
+    :param lat_ec: EarthCARE latitude array.
+    :param lon_ec: EarthCARE longitude array.
+    :returns: Boolean mask shaped like the EarthCARE lat/lon arrays, True where
+        EarthCARE points fall within the PACE granule.
     """
     num_pts_per_edge = 10
     # TODO: account for dimensions of different products
@@ -357,15 +350,15 @@ def get_matchup_mask(
 def get_matchup(
     meta_matchup: MetaMatchup,
 ) -> tuple[Matchup, list[Path]]:
-    """Get a matchup from a metadata matchup. Downloads the associated EarthCARE and
-    PACE data, then get the mask describing their overlap.
+    """Get a matchup from a metadata matchup.
 
-    Args:
-        meta_matchup: A metadata matchup.
+    Downloads the associated EarthCARE and PACE data if not already present, then
+    computes the mask describing their geospatial overlap.
 
-    Returns:
-        matchup: The matchup derived from the provided metadata matchup.
-        TODO
+    :param meta_matchup: A metadata matchup.
+    :returns: Tuple of (matchup, paths_added) where matchup is the Matchup derived from
+        the provided metadata matchup, and paths_added is the list of newly downloaded
+        file paths.
     """
     paths_added = []
     paths_earthcare = []
@@ -444,28 +437,24 @@ def get_matchups(
 ) -> list[Matchup]:
     """Get a list of matchups using provided search arguments.
 
-    This function searches for PACE data matching the provided filters in batches,
-    incrementing the start time of the search window so as to search through the entire
-    range in batches. For each item in a batch of PACE results, this function finds
-    and downloads matching EarthCARE data, computes the mask of overlaps, and optionally
-    saves the matchup data to disk.
+    Searches for PACE data matching the provided filters in batches, incrementing the
+    start time of the search window to cover the entire range. For each PACE result,
+    finds and downloads matching EarthCARE data, computes the mask of overlaps, and
+    optionally saves the matchup data to disk.
 
-    Args:
-        shortname_pace: PACE collection short name.
-        shortnames_earthcare: EarthCARE collection short names.
-        temporal: The time range in which to retrieve data. Times are assumed to be UTC.
-        time_offset: This offset will be subtracted from the start time and added to the
-            end time of the time range.
-        bbox: Lat/lon bounding box in W, S, E, N order by which to limit the search.
-        limit: Limit on how many matchups to download.
-        search_batch_size: How many PACE files to get per batch.
-        verbose: If true, print update messages.
-        save: Whether to save matchups to disk.
-        filter_fn: A callable function which operates on a single matchup, returning
-            True if the matchup is to be kept, False otherwise.
-
-    Returns:
-        matchups: List of retrieved matchups.
+    :param shortname_pace: PACE collection short name.
+    :param shortnames_earthcare: EarthCARE collection short names.
+    :param temporal: The time range in which to retrieve data. Times are assumed to be UTC.
+    :param time_offset: This offset will be subtracted from the start time and added to
+        the end time of the time range.
+    :param bbox: Lat/lon bounding box in W, S, E, N order by which to limit the search.
+    :param limit: Limit on how many matchups to download.
+    :param search_batch_size: How many PACE files to get per batch.
+    :param verbose: If True, print update messages.
+    :param save: Whether to save matchups to disk.
+    :param filter_fn: A callable that accepts a single Matchup and returns True if it
+        should be kept, False otherwise.
+    :returns: List of retrieved matchups.
     """
     assert shortname_pace in PACE_SHORTNAMES
     assert isinstance(shortnames_earthcare, list)
@@ -544,10 +533,17 @@ def load_matchup(
     client_esa: Client | None = None,
     shortnames_earthcare: list[str] | None = None,
 ) -> Matchup:
-    """TODO
-    :param filepath: Standardized path to the PACE name element of a matchup's mask filepath.
-    :type filepath: Path
-    :param download_missing:
+    """Load a previously saved matchup from disk.
+
+    :param filepath: Path to the PACE name element of a matchup directory
+        (e.g., ``{data_dir}/matchups/{instrument}_{level}/{pace_stem}``).
+    :param download_missing: If True, download any PACE or EarthCARE files that are
+        not found at their expected local paths.
+    :param client_esa: pySTAC client to access ESA data. Required when
+        ``download_missing=True``.
+    :param shortnames_earthcare: If provided, only load EarthCARE matches whose product
+        type is in this list.
+    :returns: The loaded Matchup.
     """
     assert filepath.stem.startswith("PACE_")
 
@@ -592,13 +588,15 @@ def delete_matchup(
     matchup: Matchup,
     delete_associated_files: bool = False,
 ) -> None:
-    """TODO
+    """Delete a matchup's saved mask directory from disk.
 
-    Warning: If you have any other data stored in the matchup path, it will be
-    deleted too! For this reason it is highly suggested not to store data in
-    the matchups data directory.
+    .. warning::
+        If you have any other data stored in the matchup directory, it will be
+        deleted too. Do not store additional data in the matchups data directory.
 
-    TODO
+    :param matchup: The matchup to delete.
+    :param delete_associated_files: If True, also delete the PACE and EarthCARE source
+        data files referenced by the matchup.
     """
     matchup_path = (
         PATH_DATA
@@ -616,5 +614,9 @@ def delete_matchup(
 
 
 def get_all_matchup_paths() -> list[Path]:
-    """TODO"""
+    """Get sorted paths to all saved matchup directories.
+
+    :returns: Sorted list of paths to matchup directories under the matchups data
+        directory.
+    """
     return sorted((PATH_DATA / "matchups").glob("*/*/"))

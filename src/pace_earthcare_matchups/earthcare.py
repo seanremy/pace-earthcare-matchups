@@ -19,11 +19,8 @@ from pace_earthcare_matchups.path_utils import get_path, PATH_TOKEN
 def get_short_term_token(long_term_token: str) -> str:
     """Get a short-term ESA MAAP token using your long-term token.
 
-    Args:
-        long_term_token: Long-term ESA MAAP token.
-
-    Returns:
-        access_token: A short-term ESA MAAP token.
+    :param long_term_token: Long-term ESA MAAP token.
+    :returns: A short-term ESA MAAP token.
     """
     response = requests.post(
         "https://iam.maap.eo.esa.int/realms/esa-maap/protocol/openid-connect/token",
@@ -45,12 +42,9 @@ def get_short_term_token(long_term_token: str) -> str:
 def download_earthcare_item(item: Item, datadir: Path) -> Path:
     """Download the EarthCARE file described by the provided STAC item.
 
-    Args:
-        item: STAC entry corresponding to an EarthCARE file.
-        datadir: Directory into which the EarthCARE file will be downloaded.
-
-    Returns:
-        path_outfile: Path to the downloaded EarthCARE file.
+    :param item: STAC entry corresponding to an EarthCARE file.
+    :param datadir: Directory into which the EarthCARE file will be downloaded.
+    :returns: Path to the downloaded EarthCARE file.
     """
     url_h5 = item.assets["enclosure_h5"].href
     # This is extremely unfortunate, but AWS bucket name length limits require
@@ -98,9 +92,18 @@ class EarthcareNameData:
     frame_id: str
 
     def get_file_type(self) -> str:
-        """Get the 10-character file type code of this file."""
+        """Get the 10-character file type code of this file.
+
+        :returns: 10-character file type code.
+        """
 
         def _pad(s: str, plen: int = 4) -> str:
+            """Pad a string with trailing underscores to a target length.
+
+            :param s: String to pad.
+            :param plen: Target length (default: 4).
+            :returns: Padded string.
+            """
             return s + "_" * max(0, plen - len(s))
 
         return _pad(self.category) + _pad(self.product) + self.level
@@ -108,14 +111,12 @@ class EarthcareNameData:
 
 def parse_earthcare_filename(filename: str | Path) -> EarthcareNameData:
     """Parse an EarthCARE filename or filepath.
-    See: https://earthcarehandbook.earth.esa.int/article/product for more details on the
+
+    See https://earthcarehandbook.earth.esa.int/article/product for more details on the
     EarthCARE file naming conventions.
 
-    Args:
-        filename: Name of or path to an EarthCARE file.
-
-    Returns:
-        earthcare_namedata: Description of the EarthCARE file name.
+    :param filename: Name of or path to an EarthCARE file.
+    :returns: Description of the EarthCARE file name.
     """
     stem = filename if isinstance(filename, str) else filename.stem
     stem = stem.removeprefix("ECA_")  # remove mission identifier if there
@@ -149,6 +150,14 @@ def download_missing_earthcare_data(
     filepath: Path,
     client_esa: Client,
 ) -> None:
+    """Download an EarthCARE file if it is not present at the expected local path.
+
+    Searches for the file in the ESA STAC catalog using the filename metadata and
+    downloads it to the appropriate local directory.
+
+    :param filepath: Expected local path of the EarthCARE file.
+    :param client_esa: pySTAC client to access the ESA MAAP catalog.
+    """
     ec_namedata = parse_earthcare_filename(filepath)
 
     time_window = (

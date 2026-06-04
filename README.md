@@ -58,7 +58,7 @@ set PACE_EARTHCARE_MATCHUPS_USE_EARTHACCESS=1
 
 ### ESA MAAP token
 
-To download EarthCARE data, you will need to get an ESA MAAP token. Go to [the ESA MAAP portal](https://portal.maap.eo.esa.int/ini/services/auth/token/), and under `Data Access` click `Generate Data Access Token`. It will prompt you to sign in. Once you have a token, save it as a new text file. Then, set the environment variable `ESA_MAAP_TOKEN_PATH` to the path where you saved your token.
+To download EarthCARE data, you will need to get an ESA MAAP token. Go to [the ESA MAAP portal](https://portal.maap.eo.esa.int/ini/services/auth/token/), and under `Data Access` click `Generate Data Access Token`. It will prompt you to sign in. Once you have a token, save it as a new text file. Then, set the environment variable `ESA_MAAP_TOKEN_PATH` to the path where you saved your token. Note: this token will 
 ```
 set ESA_MAAP_TOKEN_PATH="/path/to/your/token/file.txt"
 ```
@@ -70,6 +70,9 @@ Notebooks in PEM are saved as [MyST markdown](https://mystmd.org/). You can conv
 jupytext --to notebook notebooks/tutorial.md
 ```
 
+## Documentation
+
+[API documentation](https://seanremy.github.io/pace-earthcare-matchups/) is a work in progress.
 
 ## What next?
 This repository is very new, and still under construction. Some features to look forward to:
