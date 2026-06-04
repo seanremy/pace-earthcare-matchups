@@ -35,6 +35,7 @@ from tqdm.notebook import tqdm
 from pace_earthcare_matchups.earthcare import (
     download_earthcare_item,
     download_missing_earthcare_data,
+    get_earthcare_latlon,
     parse_earthcare_filename,
 )
 from pace_earthcare_matchups.geospatial_utils import (
@@ -106,17 +107,23 @@ class MatchEarthcare:
             latitude/longitude bounds of 2D EarthCARE data.
         :returns: Geospatial bounds of the EarthCARE data as a line string or polygon.
         """
-        data_earthcare = h5py.File(self.filepath_earthcare)
-        lat_data = data_earthcare["ScienceData/latitude"]
-        lon_data = data_earthcare["ScienceData/longitude"]
-        assert isinstance(lat_data, h5py.Dataset)
-        assert isinstance(lon_data, h5py.Dataset)
-        lat, lon = lat_data[()], lon_data[()]
+        lat, lon = get_earthcare_latlon(self.filepath_earthcare)
+
+        # fix some product-specific issues
+        if self.filepath_earthcare.parent.name == "MSI_NOM_1B":
+            # for MSI, take only the first band's lat/lon
+            lat, lon = lat[0], lon[0]  # TODO: get the convex hull of all bands?
+        if len(lat.shape) == 2 and self.filepath_earthcare.parent.name.split("_")[0] == "ATL":
+            # for ATLID, take the mean lat/lon across the height dimension
+            lat = np.nanmean(lat, axis=-1)
+            lon = np.nanmean(lon, axis=-1)
+        
+        # get lat/lon in different ways for different dimensionalities
         if len(lat.shape) == 1:
             return correct_linestring(LineString(np.stack([lon, lat], axis=-1)))
         elif len(lat.shape) == 2:
             # crop missing columns
-            missing = ((lat > 1e35) + (lon > 1e35)).any(axis=0)
+            missing = (np.isnan(lat) + np.isnan(lon)).any(axis=0)
             lat, lon = lat[:, ~missing], lon[:, ~missing]
             idx_sides = [
                 np.linspace(0, idx - 1, pts_per_side).astype(int) for idx in lat.shape
@@ -142,7 +149,7 @@ class MatchEarthcare:
             )
         else:
             raise ValueError(
-                f"Expected lat/lon arrays to have 1 or 2 dimensions, got {len(lat.shape[0])}"
+                f"Expected lat/lon arrays to have 1 or 2 dimensions, got {len(lat.shape)}"
             )
 
 
@@ -190,7 +197,7 @@ class Matchup:
             ).astype(float)
             reorder_latlon_l2 = (
                 data_pace.processing_version <= "3.1"
-                and self.shortname_pace.startswith("PACE_OCI_L2_")
+                and self.shortname_pace.startswith("PACE_OCI_")
             )
             if reorder_latlon_l2:
                 poly_arr = poly_arr[..., ::-1]
@@ -264,10 +271,10 @@ def get_meta_matchup_from_granule(
 
 
 def get_matchup_mask(
-    lat_pace: npt.NDArray[np.float32],
-    lon_pace: npt.NDArray[np.float32],
-    lat_ec: npt.NDArray[np.float32],
-    lon_ec: npt.NDArray[np.float32],
+    lat_pace: npt.NDArray[np.float32 | np.float64],
+    lon_pace: npt.NDArray[np.float32 | np.float64],
+    lat_ec: npt.NDArray[np.float32 | np.float64],
+    lon_ec: npt.NDArray[np.float32 | np.float64],
 ) -> npt.NDArray:
     """Get the mask of the overlap between PACE and EarthCARE lat/lon arrays.
 
@@ -389,26 +396,22 @@ def get_matchup(
 
     matches = []
     for path_earthcare in paths_earthcare:
-        data_earthcare = h5py.File(path_earthcare)
-        lat_earthcare = data_earthcare["ScienceData/latitude"]
-        lon_earthcare = data_earthcare["ScienceData/longitude"]
-        assert isinstance(lat_earthcare, h5py.Dataset)
-        assert isinstance(lon_earthcare, h5py.Dataset)
+        lat_earthcare, lon_earthcare = get_earthcare_latlon(path_earthcare)
         if meta_matchup.granule_pace.short_name == "PACE_HARP2_L1B_SCI":
             # in the case of HARP2 L1B, use the nadir view angle's geolocation as bounds
             idx_nadir = get_nadir_idx_harp2_l1b(data_pace)
             match_mask = get_matchup_mask(
                 lat_pace[idx_nadir],
                 lon_pace[idx_nadir],
-                lat_earthcare[()],
-                lon_earthcare[()],
+                lat_earthcare,
+                lon_earthcare,
             )
         else:
             match_mask = get_matchup_mask(
                 lat_pace,
                 lon_pace,
-                lat_earthcare[()],
-                lon_earthcare[()],
+                lat_earthcare,
+                lon_earthcare,
             )
         matches.append(
             MatchEarthcare(
