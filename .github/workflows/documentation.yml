@@ -3,7 +3,9 @@ name: documentation
 on: [push, pull_request, workflow_dispatch]
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   docs:
@@ -17,11 +19,11 @@ jobs:
       - name: Sphinx build
         run: |
           sphinx-build -M html docs/source/ docs/build/
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - name: Upload Pages artifact
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/docstrings' }}
+        uses: actions/upload-pages-artifact@v3
         with:
-          publish_branch: docstrings
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/build/html
-          force_orphan: true
+          path: docs/build/html
+      - name: Deploy to GitHub Pages
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/docstrings' }}
+        uses: actions/deploy-pages@v4
