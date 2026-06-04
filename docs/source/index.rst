@@ -24,3 +24,4 @@ The most commonly used functions are presented here. Complete API documentation 
 .. autofunction:: pace_earthcare_matchups.matchup.get_matchups
 .. autofunction:: pace_earthcare_matchups.matchup.get_all_matchup_paths
 .. autofunction:: pace_earthcare_matchups.matchup.load_matchup
+.. autofunction:: pace_earthcare_matchups.plotting.plot_matchup
