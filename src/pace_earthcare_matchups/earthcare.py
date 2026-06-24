@@ -199,7 +199,9 @@ def download_missing_earthcare_data(
     )
 
 
-def get_earthcare_latlon(filepath: Path) -> tuple[
+def get_earthcare_latlon(
+    filepath: Path,
+) -> tuple[
     npt.NDArray[np.float32 | np.float64],
     npt.NDArray[np.float32 | np.float64],
 ]:
@@ -225,7 +227,9 @@ def get_earthcare_latlon(filepath: Path) -> tuple[
         lon_earthcare = science_data["Geo/longitude"]
     else:
         product_name = parse_earthcare_filename(filepath).get_file_type()
-        raise NotImplementedError(f"Don't know how to parse EarthCARE product {product_name}!")
+        raise NotImplementedError(
+            f"Don't know how to parse EarthCARE product {product_name}!"
+        )
     assert isinstance(lat_earthcare, h5py.Dataset)
     assert isinstance(lon_earthcare, h5py.Dataset)
     lat = lat_earthcare[()]

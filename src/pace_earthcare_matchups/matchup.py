@@ -16,7 +16,6 @@ import shutil
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-import h5py
 import netCDF4
 import numpy as np
 import numpy.typing as npt
@@ -53,6 +52,7 @@ from pace_earthcare_matchups.pace import (
     _query_cmr,
     download_missing_pace_data,
     get_nadir_idx_harp2_l1b,
+    get_pace_latlon,
     get_pace_shortname,
 )
 from pace_earthcare_matchups.path_utils import PATH_DATA, PATH_TOKEN, get_path
@@ -67,8 +67,8 @@ class MetaMatchEarthcare:
     """Represents the metadata of an EarthCARE file matched to a PACE file's metadata.
 
     :param item: STAC item describing an EarthCARE file.
-    :param bbox: Bounding box where the EarthCARE bounding geometry intersects the parent
-        PACE granule's bounding geometry.
+    :param bbox: Bounding box where the EarthCARE bounding geometry intersects the
+        parent PACE granule's bounding geometry.
     """
 
     item: Item
@@ -113,11 +113,14 @@ class MatchEarthcare:
         if self.filepath_earthcare.parent.name == "MSI_NOM_1B":
             # for MSI, take only the first band's lat/lon
             lat, lon = lat[0], lon[0]  # TODO: get the convex hull of all bands?
-        if len(lat.shape) == 2 and self.filepath_earthcare.parent.name.split("_")[0] == "ATL":
+        if (
+            len(lat.shape) == 2
+            and self.filepath_earthcare.parent.name.split("_")[0] == "ATL"
+        ):
             # for ATLID, take the mean lat/lon across the height dimension
             lat = np.nanmean(lat, axis=-1)
             lon = np.nanmean(lon, axis=-1)
-        
+
         # get lat/lon in different ways for different dimensionalities
         if len(lat.shape) == 1:
             return correct_linestring(LineString(np.stack([lon, lat], axis=-1)))
@@ -149,7 +152,8 @@ class MatchEarthcare:
             )
         else:
             raise ValueError(
-                f"Expected lat/lon arrays to have 1 or 2 dimensions, got {len(lat.shape)}"
+                "Expected lat/lon arrays to have 1 or 2 dimensions, got "
+                f"{len(lat.shape)}"
             )
 
 
@@ -167,7 +171,7 @@ class Matchup:
     matches_earthcare: list[MatchEarthcare]
 
     def save(self) -> None:
-        """Save this Matchup's overlap masks to disk under the matchups data directory."""
+        """Save this Matchup's overlap masks to the matchups data directory."""
         data_pace = netCDF4.Dataset(self.filepath_pace)
         pace_type = f"{data_pace.instrument}_{data_pace.processing_level}"
         stem_pace = self.filepath_pace.stem
@@ -203,17 +207,7 @@ class Matchup:
                 poly_arr = poly_arr[..., ::-1]
             return correct_polygon(Polygon(poly_arr))
         else:
-            if self.shortname_pace == "PACE_HARP2_L1B_SCI":
-                idx_nadir = get_nadir_idx_harp2_l1b(data_pace)
-                lat = data_pace["geolocation_data/latitude"][idx_nadir].filled(
-                    fill_value=np.nan
-                )
-                lon = data_pace["geolocation_data/longitude"][idx_nadir].filled(
-                    fill_value=np.nan
-                )
-            else:
-                lat = data_pace["geolocation_data/latitude"][()].filled(fill_value=np.nan)
-                lon = data_pace["geolocation_data/longitude"][()].filled(fill_value=np.nan)
+            lat, lon = get_pace_latlon(self.filepath_pace)
             latlon_ring = get_outer_ring(np.stack([lon, lat], axis=-1))
             return correct_polygon(Polygon(latlon_ring))
 
@@ -279,7 +273,7 @@ def get_matchup_mask(
     """Get the mask of the overlap between PACE and EarthCARE lat/lon arrays.
 
     The mask is in the shape of the provided EarthCARE data, indicating which EarthCARE
-    points fall within the PACE granule boundary. PACE data is expected to be a 2D array.
+    points fall within the PACE granule boundary. PACE data is a 2D array.
 
     :param lat_pace: PACE latitude array.
     :param lon_pace: PACE longitude array.
@@ -316,7 +310,7 @@ def get_matchup_mask(
     centering_fn = get_centering_function(lat_pace, lon_pace)
     lat_rot_ec, lon_rot_ec = centering_fn(lat_ec, lon_ec)
 
-    # get and rotate the lat/lon at these polygon locations, then take the mean for each angle
+    # get and rotate the lat/lon at these polygon locations & get the mean of each angle
     lat_poly = lat_pace[[p[0] for p in poly_idx], [p[1] for p in poly_idx]]
     lon_poly = lon_pace[[p[0] for p in poly_idx], [p[1] for p in poly_idx]]
     lat_rot_poly, lon_rot_poly = centering_fn(lat_poly, lon_poly)
@@ -447,7 +441,8 @@ def get_matchups(
 
     :param shortname_pace: PACE collection short name.
     :param shortnames_earthcare: EarthCARE collection short names.
-    :param temporal: The time range in which to retrieve data. Times are assumed to be UTC.
+    :param temporal: The time range in which to retrieve data. Times are assumed to be
+        UTC.
     :param time_offset: This offset will be subtracted from the start time and added to
         the end time of the time range.
     :param bbox: Lat/lon bounding box in W, S, E, N order by which to limit the search.

@@ -16,6 +16,7 @@ from maap.Result import Granule as MAAPGranule
 from maap.maap import MAAP
 import netCDF4
 import numpy as np
+import numpy.typing as npt
 from shapely import MultiPolygon, Polygon
 
 from pace_earthcare_matchups.geospatial_utils import correct_polygon
@@ -136,7 +137,8 @@ class Granule:
             )
         else:
             raise TypeError(
-                f"Result of type {type(result)} is neither `maap.Result.Granule` nor `earthaccess.results.DataGranule`!"
+                f"Result of type {type(result)} is neither `maap.Result.Granule` nor "
+                "`earthaccess.results.DataGranule`!"
             )
 
     def download(self) -> None:

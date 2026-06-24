@@ -400,7 +400,9 @@ def correct_linestring(line: LineString) -> LineString | MultiLineString:
     return MultiLineString([LineString(c) for c in coords])
 
 
-def geom_to_coords(geom: LineString | MultiLineString | Polygon | MultiPolygon) -> npt.NDArray:
+def geom_to_coords(
+    geom: LineString | MultiLineString | Polygon | MultiPolygon,
+) -> npt.NDArray:
     """Extract coordinates from a Shapely geometry into a single numpy array.
 
     For multi-geometries, coordinates from all component geometries are concatenated.
