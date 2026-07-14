@@ -400,7 +400,9 @@ def correct_linestring(line: LineString) -> LineString | MultiLineString:
     return MultiLineString([LineString(c) for c in coords])
 
 
-def geom_to_coords(geom: LineString | MultiLineString | Polygon | MultiPolygon) -> npt.NDArray:
+def geom_to_coords(
+    geom: LineString | MultiLineString | Polygon | MultiPolygon,
+) -> npt.NDArray:
     """Extract coordinates from a Shapely geometry into a single numpy array.
 
     For multi-geometries, coordinates from all component geometries are concatenated.
@@ -564,3 +566,33 @@ def get_outer_ring(arr: npt.NDArray) -> npt.NDArray:
     :returns: Array of shape (2*(M+N)-4, ...) containing the outer ring elements.
     """
     return np.concatenate([arr[0], arr[:, -1], arr[-1][::-1], arr[:, 0][::-1]])
+
+
+def geo2ecef(
+    lat: npt.NDArray,
+    lon: npt.NDArray,
+    alt: npt.NDArray,
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    """Convert geodetic coordinates to Earth-Centered, Earth-Fixed (ECEF) Cartesian
+    coordinates.
+
+    Uses the WGS-84 ellipsoid. Input arrays must share the same shape; the
+    output arrays have that same shape.
+
+    :param lat: Geodetic latitude in degrees.
+    :param lon: Geodetic longitude in degrees.
+    :param alt: Altitude above the WGS-84 ellipsoid in meters.
+    :returns: Tuple of ``(x, y, z)`` ECEF coordinates in meters, each with
+        the same shape as the input arrays.
+    :rtype: tuple[npt.NDArray, npt.NDArray, npt.NDArray]
+    """
+    assert lat.shape == lon.shape  # and lat.shape == alt.shape
+    shp = lat.shape
+    lat = np.radians(lat.flatten())
+    lon = np.radians(lon.flatten())
+    alt = alt.flatten()
+    N = WGS_84_A / np.sqrt(1 - (WGS_84_E * np.sin(lat) ** 2))
+    x = (N + alt) * np.cos(lat) * np.cos(lon)
+    y = (N + alt) * np.cos(lat) * np.sin(lon)
+    z = (N * (1 - WGS_84_E) + alt) * np.sin(lat)
+    return x.reshape(shp), y.reshape(shp), z.reshape(shp)

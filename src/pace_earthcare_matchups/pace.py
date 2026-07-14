@@ -16,6 +16,7 @@ from maap.Result import Granule as MAAPGranule
 from maap.maap import MAAP
 import netCDF4
 import numpy as np
+import numpy.typing as npt
 from shapely import MultiPolygon, Polygon
 
 from pace_earthcare_matchups.geospatial_utils import correct_polygon
@@ -136,7 +137,8 @@ class Granule:
             )
         else:
             raise TypeError(
-                f"Result of type {type(result)} is neither `maap.Result.Granule` nor `earthaccess.results.DataGranule`!"
+                f"Result of type {type(result)} is neither `maap.Result.Granule` nor "
+                "`earthaccess.results.DataGranule`!"
             )
 
     def download(self) -> None:
@@ -319,3 +321,32 @@ def download_missing_pace_data(filepath: Path) -> None:
     assert len(results) == 1
     assert results[0].filepath.name == filepath.name
     results[0].download()
+
+
+def get_pace_latlon(
+    filepath: Path,
+) -> tuple[
+    npt.NDArray[np.float32 | np.float64],
+    npt.NDArray[np.float32 | np.float64],
+]:
+    """Get the latitude and longitude arrays from a PACE file.
+
+    Note: In the case of HARP2 L1B, retrieves only the nadir lat/lon.
+
+    :param filepath: Path to the PACE file.
+    :returns: Tuple of (latitude array, longitude array).
+    """
+    data_pace = netCDF4.Dataset(filepath)
+    subset = ()
+    if data_pace.instrument == "HARP2" and data_pace.processing_level == "L1B":
+        subset = get_nadir_idx_harp2_l1b(data_pace)
+    for group in ["geolocation_data", "navigation_data"]:
+        try:
+            lat = data_pace[group + "/latitude"][subset].filled(fill_value=np.nan)
+            lon = data_pace[group + "/longitude"][subset].filled(fill_value=np.nan)
+            return lat, lon
+        except KeyError:
+            continue
+    raise ValueError(
+        "Provided file contained neither `geolocation_data` nor `navigation_data`"
+    )

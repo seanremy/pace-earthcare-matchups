@@ -88,46 +88,47 @@ matchups_from_disk = [load_matchup(p) for p in get_all_matchup_paths()]
 print(f"You have {len(matchups_from_disk)} matchups saved.")
 ```
 
-### Working with matchups:
-Let's do something a bit more advanced now, and start working with the actual data products. We'll need a couple libraries to read the data. First, let's filter the matchups we just loaded to only the ones using the PACE L2 cloud product. If you haven't changed anything, this should give you the same matchups from before.
+### Comparisons
+So far we've only worried about getting matchups on the file level. Next, we'll learn how to use PEM to compare our data on the level of individual observations.
+
+Fortunately, PEM makes this easy. All we need is the names of the PACE and EarthCARE variables we want to compare.
+
+We'll start with the `get_comparison_dict` function, which takes a single matchup and a list of PACE variable paths. This function samples the PACE variables of interest to each EarthCARE sensor's frame. For now, we'll just ask for the OCI cloud-top height "cth", which can be found in the "geophysical_data" group.
 
 ```{code-cell} ipython3
+from pace_earthcare_matchups.compare import get_comparison_dict
+
 matchups_cld = [m for m in matchups_from_disk if m.shortname_pace == "PACE_OCI_L2_CLOUD"]
+matchup = matchups_cld[0]  # take just the first matchup
+# the next line may take a few seconds to interpolate all the data
+comp = get_comparison_dict(
+    matchup,
+    ["geophysical_data/cth"],
+)
 ```
 
-Next, let's just make sure we can load the first PACE granule. We'll need the netCDF4 library, though you can also use xarray if you're familiar with that. Every matchup has a `filepath_pace` attribute pointing to its local path. You should see the top-level netCDF information displayed after running the next cell.
+The retrieved dictionary has our CTH variable resampled for comparison with both of the EarthCARE instruments we specified earlier. For MSI, the array will be 2D; for ATLID, it will be 1D. It also contains the latitude and longitudes of the matched points. Also, it keeps track of the filepath to the matching EarthCARE file.
 
 ```{code-cell} ipython3
-import netCDF4
-
-matchup = matchups_cld[0]  # take just the first matchup as an example
-data_pace = netCDF4.Dataset(matchup.filepath_pace)
-data_pace
+print("MSI-interpolated shapes:")
+for c in comp["AM__CTH_2B"].values():
+    print("\t", c["filepath_earthcare"].name)
+    print("\t", c["geophysical_data/cth"].shape)
+print("ATLID-interpolated shapes:")
+for c in comp["ATL_CTH_2A"].values():
+    print("\t", c["filepath_earthcare"].name)
+    print("\t", c["geophysical_data/cth"].shape)
 ```
 
-Now, let's check that we can load the EarthCARE data as well. We'll use h5py. Every matchup has a list of matching EarthCARE data called `matches_earthcare`, and every one of these matches has a `filepath_earthcare`.
-
-```{code-cell} ipython3
-import h5py
-
-data_earthcare = h5py.File(matchup.matches_earthcare[0].filepath_earthcare)
-data_earthcare
-```
-
-PEM conveniently computes a geospatial overlap mask between a PACE granule and each matching EarthCARE file. We retrieved two EarthCARE products: one from ATLID, and one which combines ATLID and MSI. The ATLID masks will be 1-dimensional, corresponding the ATLID curtain, and the ATLID/MSI combined masks will be 2-dimensional images.
-
-```{code-cell} ipython3
-for match in matchup.matches_earthcare:
-    print(match.mask.shape)
-```
-
-Here's a simple plot with the PACE OCI cloud-top height on the left, and the ATLID / MSI combined cloud-top height on the right:
+### Plotting
+Now we have everything we need to generate some comparison plots. First, comparing OCI and MSI:
 
 ```{code-cell} ipython3
 import cartopy.crs as ccrs
+import h5py
+import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
-
 
 # helper function to fill hdf5 data with NaN at its fill value
 def read_h5_dataset(dataset):
@@ -135,41 +136,48 @@ def read_h5_dataset(dataset):
     arr[arr == dataset.fillvalue] = np.nan
     return arr
 
-# get the PACE cloud-top height (convert km -> m)
-cth_pace = data_pace["geophysical_data/cth"][()].filled(fill_value=np.nan) * 1000
-lat_pace = data_pace["navigation_data/latitude"][()].data
-lon_pace = data_pace["navigation_data/longitude"][()].data
-# rotate by 180 if needed
-rotate_180 = np.ptp(lon_pace) > 350
-if rotate_180:
-    lon_pace = lon_pace % 360 - 180
+c = comp["AM__CTH_2B"][0]
 
-# keep just the AM__CTH_2B combined CTH files
-data_am = []
-for match in matchup.matches_earthcare:
-    data_earthcare = h5py.File(match.filepath_earthcare)
-    if data_earthcare["HeaderData/FixedProductHeader/File_Type"][()].decode() == "AM__CTH_2B":
-        bounds = match.get_earthcare_bounds()
-        ext = np.array(bounds.exterior.coords)
-        if rotate_180:
-            ext[..., 0] = ext[..., 0] % 360 - 180
-        data_am.append((ext, data_earthcare))
+data = h5py.File(c["filepath_earthcare"])
+cth_msi = read_h5_dataset(data["ScienceData/cloud_top_height_MSI"])[c["start"]:c["end"]] / 1000  # m -> km
+cth_pace = c["geophysical_data/cth"]
 
-fig, axs = plt.subplots(1, 2, figsize=(10, 10), subplot_kw={"projection": ccrs.PlateCarree()})
-axs[0].pcolormesh(lon_pace, lat_pace, cth_pace, clim=(0, 2e4), shading="gouraud")
-for ext, data_earthcare in data_am:
-    lat = data_earthcare["ScienceData/latitude"][()]
-    lon = data_earthcare["ScienceData/longitude"][()]
-    if rotate_180:
-        lon = lon % 360 - 180
-    cth_msi = read_h5_dataset(data_earthcare["ScienceData/cloud_top_height_MSI"])
-    axs[1].pcolormesh(lon, lat, cth_msi, clim=(0, 2e4), shading="gouraud")
-    axs[0].plot(
-        ext[..., 0],
-        ext[..., 1],
-        linewidth=2,
-    )[0]
-axs[0].set_title(matchup.filepath_pace.stem)
-axs[1].set_title("Matched MSI cloud-top height")
+fig = plt.figure(figsize=(9, 8), constrained_layout=True)
+gs = gridspec.GridSpec(62, 62, figure=fig)
+ax_oci = fig.add_subplot(gs[:, :20], projection=ccrs.PlateCarree())
+ax_msi = fig.add_subplot(gs[:, 20:40], projection=ccrs.PlateCarree())
+ax_cbar1 = fig.add_subplot(gs[:, 40:41])
+ax_diff = fig.add_subplot(gs[:, 41:61], projection=ccrs.PlateCarree())
+ax_cbar2 = fig.add_subplot(gs[:, 61:])
+
+# fig, axs = plt.subplots(1, 3, figsize=(10, 10), subplot_kw={"projection": ccrs.PlateCarree()})
+cbar1 = ax_oci.pcolormesh(c["longitude"], c["latitude"], cth_pace, clim=(0, 15), shading="gouraud")
+ax_oci.set_title(f"OCI cloud-top height (km)\n{matchup.filepath_pace.stem.split('.')[1]}")
+ax_msi.pcolormesh(c["longitude"], c["latitude"], cth_msi, clim=(0, 15), shading="gouraud")
+ax_msi.set_title(f"MSI cloud-top height (km)\n{c['filepath_earthcare'].name.split('_')[5]}")
+cbar2 = ax_diff.pcolormesh(c["longitude"], c["latitude"], cth_msi - cth_pace, clim=(-2, 2), cmap="RdBu", shading="gouraud")
+ax_diff.set_title("MSI $-$ OCI (km)")
+for ax in [ax_oci, ax_msi, ax_diff]:
+    ax.set_xlim(c["longitude"].min(), c["longitude"].max())
+    ax.set_ylim(c["latitude"].min(), c["latitude"].max())
+    ax.set_facecolor("black")
+fig.colorbar(cbar1, cax=ax_cbar1)
+fig.colorbar(cbar2, cax=ax_cbar2)
 plt.show();
+```
+
+Finally, a line plot comparing OCI with the ATLID CTH:
+
+```{code-cell} ipython3
+c = comp["ATL_CTH_2A"][0]
+
+data = h5py.File(c["filepath_earthcare"])
+cth_atl = read_h5_dataset(data["ScienceData/ATLID_cloud_top_height"])[c["start"]:c["end"]] / 1000  # m -> km
+
+plt.figure(figsize=(16,  4))
+plt.plot(c["latitude"][:, 0], c["geophysical_data/cth"], label="OCI")
+plt.plot(c["latitude"][:, 0], cth_atl, label="ATLID")
+plt.legend()
+plt.title("Cloud-top height (km)")
+plt.show()
 ```

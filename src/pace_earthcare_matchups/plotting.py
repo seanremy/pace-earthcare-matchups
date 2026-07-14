@@ -20,7 +20,11 @@ from shapely import (
     Polygon,
 )
 
-from pace_earthcare_matchups.geospatial_utils import geom_to_coords, line_shift, poly_shift
+from pace_earthcare_matchups.geospatial_utils import (
+    geom_to_coords,
+    line_shift,
+    poly_shift,
+)
 from pace_earthcare_matchups.matchup import Matchup
 
 
@@ -88,9 +92,7 @@ def plot_matchups(
         fig_filepath = Path(fig_filepath)
     lon_shift = get_best_longitude_shift(matchups)
     fig = plt.figure(figsize=figsize)
-    ax = fig.add_subplot(
-        projection=ccrs.PlateCarree(central_longitude=lon_shift)
-    )
+    ax = fig.add_subplot(projection=ccrs.PlateCarree(central_longitude=lon_shift))
     assert isinstance(ax, GeoAxes)
     ax.stock_img(alpha=0.8)
     ax.add_feature(cfeature.COASTLINE)
@@ -200,15 +202,19 @@ def plot_matchups(
             )
     if title:
         ax.set_title(title, fontproperties=title_prop)
-    ax.legend(handles=[e[1] for e in sorted(plot_elements.items(), key=lambda i: i[0])],
-              prop=leg_prop)
+    ax.legend(
+        handles=[e[1] for e in sorted(plot_elements.items(), key=lambda i: i[0])],
+        prop=leg_prop,
+    )
     ax.set_xlim(max(-180, minlon - 5), min(180, maxlon + 5))
-    
+
     ax.set_ylim(max(-90, minlat - 5), min(90, maxlat + 5))
 
     if fig_filepath:
         if pdf:
-            plt.savefig(fig_filepath.with_suffix(".pdf"), bbox_inches="tight", format="pdf")
+            plt.savefig(
+                fig_filepath.with_suffix(".pdf"), bbox_inches="tight", format="pdf"
+            )
         else:
             plt.savefig(fig_filepath, dpi=200, bbox_inches="tight")
 
