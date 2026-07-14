@@ -5,6 +5,7 @@ intercomparison code!
 """
 
 from collections import defaultdict
+from typing import Literal
 
 import netCDF4
 import numpy as np
@@ -13,8 +14,57 @@ from scipy.spatial import KDTree
 
 from pace_earthcare_matchups.earthcare import get_earthcare_latlon
 from pace_earthcare_matchups.geospatial_utils import geo2ecef
-from pace_earthcare_matchups.matchup import Matchup
+from pace_earthcare_matchups.matchup import Matchup, MatchEarthcare
 from pace_earthcare_matchups.pace import get_pace_latlon
+
+
+def _prepare_interp(
+    img_src: npt.NDArray,
+    lat_src: npt.NDArray,
+    lon_src: npt.NDArray,
+    alt_src: npt.NDArray | None,
+    lat_dest: npt.NDArray,
+    lon_dest: npt.NDArray,
+    alt_dest: npt.NDArray | None,
+    k: int,
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, tuple, tuple]:
+    """Validate inputs, convert to ECEF, build a KDTree, and query k neighbors.
+
+    :returns: ``(dists, match_idx, img_src_3d, shp_src, shp_dest)`` where
+        *dists* and *match_idx* have shape ``(U2*V2, k)`` and *img_src_3d*
+        has been normalized to shape ``(U1, V1, N)``.
+    """
+    if alt_src is None or alt_dest is None:
+        assert alt_src == alt_dest
+        alt_src = np.zeros_like(lat_src)
+        alt_dest = np.zeros_like(lat_dest)
+    assert len(img_src.shape) in [2, 3]
+    assert len(lat_src.shape) == 2
+    assert len(lat_dest.shape) == 2
+    assert img_src.shape[:2] == lat_src.shape == lon_src.shape == alt_src.shape
+    assert lat_dest.shape == lon_dest.shape == alt_dest.shape
+    shp_src = img_src.shape
+    shp_dest = lat_dest.shape
+    if len(img_src.shape) == 2:
+        img_src = img_src[..., None]
+    else:
+        shp_dest += (shp_src[-1],)
+    # project latitude and longitude to ECEF for better distances
+    xyz_src = np.stack(
+        geo2ecef(lat_src.ravel(), lon_src.ravel(), alt_src.ravel()), axis=-1
+    )
+    xyz_dest = np.stack(
+        geo2ecef(lat_dest.ravel(), lon_dest.ravel(), alt_dest.ravel()), axis=-1
+    )
+    non_nan = ~np.isnan(xyz_src).any(axis=1)
+    kdtree = KDTree(xyz_src[non_nan])
+    dists, match_idx = kdtree.query(xyz_dest.reshape((-1, 3)), k=k)
+    match_idx = np.where(non_nan)[0][match_idx]
+    # scipy returns 1-D arrays when k=1; normalize to (N, k) for uniform downstream use
+    if k == 1:
+        dists = dists[:, None]
+        match_idx = match_idx[:, None]
+    return dists, match_idx, img_src, shp_src, shp_dest
 
 
 def interp_inverse_distance_weighting(
@@ -51,34 +101,9 @@ def interp_inverse_distance_weighting(
     Returns:
         img_dest: The interpolated image, shape (U2, V2) or (U2, V2, N).
     """
-    if alt_src is None or alt_dest is None:
-        assert alt_src == alt_dest
-        alt_src = np.zeros_like(lat_src)
-        alt_dest = np.zeros_like(lat_dest)
-    assert len(img_src.shape) in [2, 3]
-    assert len(lat_src.shape) == 2
-    assert len(lat_dest.shape) == 2
-    assert img_src.shape[:2] == lat_src.shape == lon_src.shape == alt_src.shape
-    assert lat_dest.shape == lon_dest.shape == alt_dest.shape
-    shp_src = img_src.shape
-    shp_dest = lat_dest.shape
-    if len(img_src.shape) == 2:
-        img_src = img_src[..., None]
-    else:
-        shp_dest += (shp_src[-1],)
-    # project latitude and longitude to ECEF for better distances
-    xyz_src = np.stack(
-        geo2ecef(lat_src.ravel(), lon_src.ravel(), alt_src.ravel()), axis=-1
+    dists, match_idx, img_src, shp_src, shp_dest = _prepare_interp(
+        img_src, lat_src, lon_src, alt_src, lat_dest, lon_dest, alt_dest, k
     )
-    xyz_dest = np.stack(
-        geo2ecef(lat_dest.ravel(), lon_dest.ravel(), alt_dest.ravel()), axis=-1
-    )
-    # kdtree for the source locations, query at the destination
-    non_nan = ~np.isnan(xyz_src).any(axis=1)
-    kdtree = KDTree(xyz_src[non_nan])
-    dists, match_idx = kdtree.query(xyz_dest.reshape((-1, 3)), k=k)
-    match_idx = np.where(non_nan)[0][match_idx]
-    # inverse distance weighting
     wts_interp = np.zeros_like(dists)
     wts_interp[dists > 0] = 1 / dists[dists > 0]
     wts_interp_sum = wts_interp.sum(axis=1)
@@ -104,9 +129,52 @@ def interp_inverse_distance_weighting(
     return img_dest.reshape(shp_dest)
 
 
+def interp_nearest_neighbor(
+    img_src: npt.NDArray,
+    lat_src: npt.NDArray,
+    lon_src: npt.NDArray,
+    alt_src: npt.NDArray | None,
+    lat_dest: npt.NDArray,
+    lon_dest: npt.NDArray,
+    alt_dest: npt.NDArray | None,
+) -> npt.NDArray:
+    """Interpolate a geolocated image to new coords by nearest-neighbor lookup.
+
+    Each destination location is assigned the value of the single closest source
+    pixel in ECEF space. Out-of-bounds handling follows the same edge-detection
+    heuristic as :func:`interp_inverse_distance_weighting`.
+
+    :param img_src: The source image, shape (U1, V1) or (U1, V1, N).
+    :param lat_src: The source latitudes in degrees, shape (U1, V1).
+    :param lon_src: The source longitudes in degrees, shape (U1, V1).
+    :param alt_src: The source altitudes in meters above the reference ellipsoid
+        (WGS84), shape (U1, V1), or None to assume sea level altitude.
+    :param lat_dest: The destination latitudes in degrees, shape (U2, V2).
+    :param lon_dest: The destination longitudes in degrees, shape (U2, V2).
+    :param alt_dest: The destination altitudes in meters above the reference ellipsoid
+        (WGS84), shape (U2, V2), or None to assume sea level altitude.
+    :param remove_oob: A flag that controls whether out-of-bounds locations will be set
+        to NaN, default=True.
+
+    :returns: The interpolated image, shape (U2, V2) or (U2, V2, N).
+    """
+    _, match_idx, img_src, _, shp_dest = _prepare_interp(
+        img_src, lat_src, lon_src, alt_src, lat_dest, lon_dest, alt_dest, k=1
+    )
+    img_dest = img_src.reshape((-1,) + img_src.shape[2:])[match_idx[:, 0]]
+    return img_dest.reshape(shp_dest)
+
+
+_INTERP_FUNCS = {
+    "idw": interp_inverse_distance_weighting,
+    "nearest": interp_nearest_neighbor,
+}
+
+
 def get_comparison_dict(
     matchup: Matchup,
     pace_variables: list[str],
+    method: Literal["idw", "nearest"] = "idw",
 ) -> defaultdict[str, defaultdict[int, dict[str, npt.NDArray]]]:
     """Build a nested comparison dictionary by interpolating PACE variables onto
     EarthCARE geolocations.
@@ -121,10 +189,13 @@ def get_comparison_dict(
         PACE filepath, EarthCARE filepaths, and per-granule overlap masks.
     :param pace_variables: List of NetCDF variable paths to read from the PACE file and
         interpolate onto EarthCARE coordinates (e.g. `["observation_data/i", ...]`).
+    :param method: Interpolation method to use. ``"idw"`` (default) applies inverse
+        distance weighting across the k nearest neighbors; ``"nearest"`` assigns the
+        value of the single closest source pixel.
     :returns: A nested dict with structure
         ``{earthcare_product: {match_index: {key: array}}}``, where each inner dict
             contains:
-
+        - ``"filepath_earthcare"`` -- Filepath of EarthCARE granule for comparison.
         - ``"latitude"`` -- EarthCARE latitudes at matched locations, shape ``(M,)``
             or ``(M, 1)``.
         - ``"longitude"`` -- EarthCARE longitudes at matched locations, shape ``(M,)``
@@ -134,6 +205,7 @@ def get_comparison_dict(
         - one entry per name in *pace_variables* -- the PACE variable interpolated to
           EarthCARE locations, same leading shape as the latitude/longitude arrays.
     """
+    interp = _INTERP_FUNCS[method]
 
     matches = defaultdict(list)
     for match in matchup.matches_earthcare:
@@ -141,7 +213,7 @@ def get_comparison_dict(
         matches[ec_short_name].append(match)
 
     pace_arrs = []
-    with netCDF4.Dataset(matchup.filepath_pace) as data_pace:
+    with netCDF4.Dataset(matchup.filepath_pace) as data_pace: 
         for pace_var in pace_variables:
             pace_arrs.append(data_pace[pace_var][()].filled(fill_value=np.nan))
         pace_arr = np.stack(pace_arrs, axis=-1)
@@ -151,32 +223,25 @@ def get_comparison_dict(
     comp_dict = defaultdict(lambda: defaultdict(lambda: dict()))
     for ec_short_name, match_list in matches.items():
         for i, match in enumerate(match_list):
+            assert isinstance(match, MatchEarthcare)
             # TODO: handle BBR's 3 angles
             lat_ec, lon_ec = get_earthcare_latlon(match.filepath_earthcare)
+            mask_idx = np.where(match.mask)
+            start = mask_idx[0].min()
+            end = mask_idx[0].max() + 1
             if len(match.mask.shape) == 2:
-                mask_idx = np.where(match.mask)
-                start = mask_idx[0].min()
-                end = mask_idx[0].max() + 1
                 lat_ec = lat_ec[start:end]
                 lon_ec = lon_ec[start:end]
-                comp_dict[ec_short_name][i]["start"] = start
-                comp_dict[ec_short_name][i]["end"] = end
             else:
                 lat_ec = lat_ec[match.mask]
                 lon_ec = lon_ec[match.mask]
                 lat_ec, lon_ec = lat_ec[:, None], lon_ec[:, None]
+            comp_dict[ec_short_name][i]["start"] = start
+            comp_dict[ec_short_name][i]["end"] = end
             comp_dict[ec_short_name][i]["latitude"] = lat_ec
             comp_dict[ec_short_name][i]["longitude"] = lon_ec
-            # TODO: support more than IDW
-            pace_arr_interp = interp_inverse_distance_weighting(
-                pace_arr,
-                lat_pace,
-                lon_pace,
-                None,
-                lat_ec,
-                lon_ec,
-                None,
-            )
+            pace_arr_interp = interp(pace_arr, lat_pace, lon_pace, None, lat_ec, lon_ec, None)
             for j, pace_var in enumerate(pace_variables):
-                comp_dict[ec_short_name][i][pace_var] = pace_arr_interp[..., j]
+                comp_dict[ec_short_name][i][pace_var] = pace_arr_interp[..., j].squeeze()
+            comp_dict[ec_short_name][i]["filepath_earthcare"] = match.filepath_earthcare
     return comp_dict
