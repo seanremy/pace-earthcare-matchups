@@ -173,7 +173,7 @@ def _query_cmr(
     )
     if not use_earthaccess:
         bbox_str = ",".join([str(n) for n in bbox])
-        results_pace = MAAP().searchGranule(
+        results_pace = MAAP().search_granule(
             cmr_host=CMR_HOST,
             short_name=short_name,
             temporal=",".join(
