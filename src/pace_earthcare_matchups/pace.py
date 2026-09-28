@@ -146,7 +146,12 @@ def _query_cmr(
     )
     if not use_earthaccess:
         bbox_str = ",".join([str(n) for n in bbox])
-        results_pace = MAAP().searchGranule(
+        maap = MAAP()
+        try:
+            search_granule_fn = maap.search_granule  # type: ignore
+        except AttributeError:
+            search_granule_fn = maap.searchGranule  # type: ignore
+        results_pace = search_granule_fn(
             cmr_host=CMR_HOST,
             short_name=short_name,
             temporal=",".join(
