@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 import re
 import shutil
+import time
+import traceback
 from typing import Callable
 from zoneinfo import ZoneInfo
 
@@ -21,6 +23,7 @@ import numpy as np
 import numpy.typing as npt
 from pystac_client import Client
 from pystac.item import Item
+from pystac_client.exceptions import APIError
 from shapely import (
     LineString,
     MultiLineString,
@@ -217,6 +220,7 @@ def get_meta_matchup_from_granule(
     granule_pace: Granule,
     shortnames_earthcare: list[str],
     time_offset: timedelta = timedelta(seconds=5),
+    max_api_attempts: int = 3,
 ) -> MetaMatchup | None:
     """Get a metadata matchup from the provided PACE granule.
 
@@ -225,6 +229,8 @@ def get_meta_matchup_from_granule(
     :param shortnames_earthcare: List of EarthCARE collection short names.
     :param time_offset: This offset will be subtracted from the start time and added to
         the end time of the time range.
+    :param max_api_attempts: The maximum number of times to repeat the ESA MAAP API
+        query after encountering an APIError.
     :returns: A metadata matchup with EarthCARE metadata overlapping the provided PACE
         granule, or None if no overlapping EarthCARE data was found.
     """
@@ -236,14 +242,25 @@ def get_meta_matchup_from_granule(
         return None
     items_ec = []
     for shortname_ec in shortnames_earthcare:
-        results_esa = client_esa.search(
-            collections=["EarthCAREL1Validated_MAAP", "EarthCAREL2Validated_MAAP"],
-            datetime=dt_range_offset,
-            intersects=to_geojson(granule_pace.geospatial_bounds),
-            method="GET",
-            filter=f"productType = '{shortname_ec}'",
-        )
-        items_ec += list(results_esa.items())
+        for attempt_count in range(max_api_attempts):
+            try:
+                results_esa = client_esa.search(
+                    collections=["EarthCAREL1Validated_MAAP", "EarthCAREL2Validated_MAAP"],
+                    datetime=dt_range_offset,
+                    intersects=to_geojson(granule_pace.geospatial_bounds),
+                    method="GET",
+                    filter=f"productType = '{shortname_ec}'",
+                )
+                items_ec += list(results_esa.items())
+                break
+            except APIError as e:
+                if attempt_count < max_api_attempts - 1:
+                    print(f"APIError on query #{attempt_count+1} to the ESA MAAP API, trying again in 2 seconds:")
+                    traceback.print_exc()
+                    time.sleep(2)
+                else:
+                    print(f"Got {max_api_attempts} APIErrors in a row:")
+                    raise e
     if len(items_ec) > 0:
         # arrange by file type and start time, keep the newest baseline
         items_dict = defaultdict(list)
