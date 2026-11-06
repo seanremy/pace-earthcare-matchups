@@ -20,7 +20,7 @@ dependencies = [
     "tqdm",
 ]
 
-[dependency-groups]
+[project.optional-dependencies]
 docs = [
   "sphinx",
   "sphinx-rtd-theme",
