@@ -14,7 +14,6 @@ from shapely import (
     Polygon,
 )
 
-
 # WGS-84 constants
 WGS_84_A = 6378137.0  # semimajor axis
 WGS_84_B = 6356752.314245  # semiminor axis

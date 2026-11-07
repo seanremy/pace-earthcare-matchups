@@ -4,8 +4,6 @@ from pathlib import Path
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-from cartopy.mpl.geoaxes import GeoAxes
-from matplotlib.figure import Figure
 import matplotlib.font_manager as fm
 import matplotlib.lines
 import matplotlib.patches
@@ -13,6 +11,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import seaborn as sns
+from cartopy.mpl.geoaxes import GeoAxes
+from matplotlib.figure import Figure
 from shapely import (
     LineString,
     MultiLineString,

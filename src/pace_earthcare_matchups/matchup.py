@@ -6,23 +6,23 @@ requires the files to be downloaded locally. A two-stage approach of performing 
 comparisons first vastly reduces the number of files which must be locally downloaded.
 """
 
-from collections import defaultdict
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 import os
-from pathlib import Path
 import re
 import shutil
 import time
 import traceback
-from typing import Callable
+from collections import defaultdict
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import netCDF4
 import numpy as np
 import numpy.typing as npt
-from pystac_client import Client
 from pystac.item import Item
+from pystac_client import Client
 from pystac_client.exceptions import APIError
 from shapely import (
     LineString,
@@ -58,7 +58,7 @@ from pace_earthcare_matchups.pace import (
     get_pace_latlon,
     get_pace_shortname,
 )
-from pace_earthcare_matchups.path_utils import PATH_DATA, PATH_TOKEN, get_path
+from pace_earthcare_matchups.path_utils import PATH_DATA, get_path
 from pace_earthcare_matchups.supported_products import (
     EARTHCARE_SHORTNAMES,
     PACE_SHORTNAMES,
@@ -245,7 +245,10 @@ def get_meta_matchup_from_granule(
         for attempt_count in range(max_api_attempts):
             try:
                 results_esa = client_esa.search(
-                    collections=["EarthCAREL1Validated_MAAP", "EarthCAREL2Validated_MAAP"],
+                    collections=[
+                        "EarthCAREL1Validated_MAAP",
+                        "EarthCAREL2Validated_MAAP",
+                    ],
                     datetime=dt_range_offset,
                     intersects=to_geojson(granule_pace.geospatial_bounds),
                     method="GET",
@@ -253,21 +256,23 @@ def get_meta_matchup_from_granule(
                 )
                 items_ec += list(results_esa.items())
                 break
-            except APIError as e:
+            except APIError:
                 if attempt_count < max_api_attempts - 1:
-                    print(f"APIError on query #{attempt_count+1} to the ESA MAAP API, trying again in 2 seconds:")
+                    print(
+                        f"APIError on query #{attempt_count + 1} to the ESA MAAP API, trying again in 2 seconds:"
+                    )
                     traceback.print_exc()
                     time.sleep(2)
                 else:
                     print(f"Got {max_api_attempts} APIErrors in a row:")
-                    raise e
+                    raise
     if len(items_ec) > 0:
         # arrange by file type and start time, keep the newest baseline
         items_dict = defaultdict(list)
         for item in items_ec:
             items_dict[item.id[9:36]].append(item)
         items_ec = [
-            sorted(items, key=lambda i: i.id[6:8])[-1] for items in items_dict.values()
+            max(items, key=lambda i: i.id[6:8]) for items in items_dict.values()
         ]
         meta_matches = []
         for item in items_ec:
@@ -576,14 +581,12 @@ def load_matchup(
     if shortnames_earthcare:
         products_ec = [p for p in products_ec if p in shortnames_earthcare]
 
-    long_term_token = open(PATH_TOKEN).read()
     matches_earthcare = []
     for prod in products_ec:
         filepaths_mask = sorted((filepath / prod).glob("*"))
         for fp in filepaths_mask:
             filepath_earthcare = PATH_DATA / "EarthCARE" / prod / f"{fp.stem}.h5"
             if download_missing and not filepath_earthcare.exists():
-                assert isinstance(long_term_token, str)
                 assert isinstance(client_esa, Client)
                 download_missing_earthcare_data(filepath_earthcare, client_esa)
             matches_earthcare.append(

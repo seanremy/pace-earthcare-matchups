@@ -25,6 +25,10 @@ docs = [
   "sphinx",
   "sphinx-rtd-theme",
 ]
+maintainers = [
+  "pre-commit",
+  "ruff",
+]
 
 [tool.pyright]
 typeCheckingMode = "standard"

@@ -1,11 +1,18 @@
 import os
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 from pystac.item import Item
 
 PATH_ROOT = (Path(__file__) / ".." / ".." / "..").resolve()
 PATH_DATA = Path(os.getenv("PACE_EARTHCARE_DATA_PATH", PATH_ROOT / "data")).resolve()
 PATH_TOKEN = Path(os.getenv("ESA_MAAP_TOKEN_PATH", PATH_ROOT / "token.txt")).resolve()
+
+
+@runtime_checkable
+class HasFilePath(Protocol):
+    # So pyright accepts not knowing the type of object supplied to `get_path`
+    filepath: Path
 
 
 def get_path(obj: object) -> Path:
@@ -31,5 +38,6 @@ def get_path(obj: object) -> Path:
         filename = title.removeprefix("ECA_")
         return PATH_DATA / "EarthCARE" / product_type / filename
     else:
-        assert hasattr(obj, "filepath")
-        return getattr(obj, "filepath")
+        # assert hasattr(obj, "filepath")
+        assert isinstance(obj, HasFilePath)
+        return obj.filepath

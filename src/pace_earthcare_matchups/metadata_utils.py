@@ -27,7 +27,6 @@ def geometry_from_item(
     :returns: The geospatial bounds of the EarthCARE file.
     :raises ValueError: If the geometry type is not ``LineString`` or ``Polygon``.
     """
-    #
     assert item.geometry
     coords = np.array(item.geometry["coordinates"])
     if item.geometry["type"] == "LineString":

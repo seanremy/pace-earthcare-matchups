@@ -2,21 +2,21 @@
 filenames.
 """
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta, UTC
-from dateutil import parser
 import os
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-import requests
 
 import h5py
 import numpy as np
 import numpy.typing as npt
+import requests
+from dateutil import parser
 from pystac.client import Client
 from pystac.item import Item
 from tqdm.notebook import tqdm
 
-from pace_earthcare_matchups.path_utils import get_path, PATH_TOKEN
+from pace_earthcare_matchups.path_utils import PATH_TOKEN, get_path
 
 
 def get_short_term_token() -> str:
@@ -39,7 +39,8 @@ def get_short_term_token() -> str:
             f"{time_until_expiration.days} days. You can get a new long-term token "
             "from https://portal.maap.eo.esa.int/ini/services/auth/token/"
         )
-    long_term_token = open(PATH_TOKEN).read().rstrip("\n")
+    with open(PATH_TOKEN) as token_io:
+        long_term_token = token_io.read().rstrip("\n")
     response = requests.post(
         "https://iam.maap.eo.esa.int/realms/esa-maap/protocol/openid-connect/token",
         data={
