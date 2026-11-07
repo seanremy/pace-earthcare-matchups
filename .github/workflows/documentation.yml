@@ -16,15 +16,15 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install --group docs .
+          pip install ".[docs]"
       - name: Sphinx build
         run: |
           sphinx-build -M html docs/source/ docs/build/
       - name: Upload Pages artifact
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/docstrings' }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs/build/html
       - name: Deploy to GitHub Pages
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/docstrings' }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: actions/deploy-pages@v4
