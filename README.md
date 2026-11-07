@@ -80,4 +80,6 @@ This repository is very new, and still under construction. Some features to look
 - a suite of notebooks showcasing some exciting PACE / EarthCARE synergies
 
 ## Contributing
-Contributions to `pace-earthcare-matchups` are highly encouraged and greatly appreciated! Come back soon for guidelines on how to contribute. Until then, feel free to raise an issue or suggest a feature.
+Contributions to PEM are highly encouraged and greatly appreciated! If you encounter a bug, if you have a request for a new feature, or if you have any suggestions at all, please create an issue! If you want to work on the issue yourself, pull requests are highly encouraged. Please remember to mention your intention to work on the issue in the description.
+
+Please read the [CONTRIBUTING](CONTRIBUTING.md) guidelines before submitting a pull request to PEM.
