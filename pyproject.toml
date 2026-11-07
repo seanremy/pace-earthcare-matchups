@@ -12,7 +12,6 @@ dependencies = [
     "matplotlib",
     "netCDF4",
     "numpy",
-    "pre-commit",
     "pystac",
     "pystac_client",
     "scipy",
@@ -25,6 +24,10 @@ dependencies = [
 docs = [
   "sphinx",
   "sphinx-rtd-theme",
+]
+maintainers = [
+  "pre-commit",
+  "ruff",
 ]
 
 [tool.pyright]
