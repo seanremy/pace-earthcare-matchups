@@ -2,26 +2,25 @@
 parsing filenames.
 """
 
+import os
+import warnings
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from dateutil import parser
-import os
 from pathlib import Path
-import warnings
 from zoneinfo import ZoneInfo
 
 import earthaccess
-from earthaccess.results import DataGranule
-from maap.Result import Granule as MAAPGranule
-from maap.maap import MAAP
 import netCDF4
 import numpy as np
 import numpy.typing as npt
+from dateutil import parser
+from earthaccess.results import DataGranule
+from maap.maap import MAAP
+from maap.Result import Granule as MAAPGranule
 from shapely import MultiPolygon, Polygon
 
 from pace_earthcare_matchups.geospatial_utils import correct_polygon
 from pace_earthcare_matchups.path_utils import PATH_DATA
-
 
 CMR_HOST = "cmr.earthdata.nasa.gov"
 SHORT_NAME_REPLACEMENTS = {

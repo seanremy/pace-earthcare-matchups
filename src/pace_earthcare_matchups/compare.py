@@ -14,7 +14,7 @@ from scipy.spatial import KDTree
 
 from pace_earthcare_matchups.earthcare import get_earthcare_latlon
 from pace_earthcare_matchups.geospatial_utils import geo2ecef
-from pace_earthcare_matchups.matchup import Matchup, MatchEarthcare
+from pace_earthcare_matchups.matchup import MatchEarthcare, Matchup
 from pace_earthcare_matchups.pace import get_pace_latlon
 
 
@@ -213,14 +213,14 @@ def get_comparison_dict(
         matches[ec_short_name].append(match)
 
     pace_arrs = []
-    with netCDF4.Dataset(matchup.filepath_pace) as data_pace: 
+    with netCDF4.Dataset(matchup.filepath_pace) as data_pace:
         for pace_var in pace_variables:
             pace_arrs.append(data_pace[pace_var][()].filled(fill_value=np.nan))
         pace_arr = np.stack(pace_arrs, axis=-1)
         # TODO: handle multi-angle cases
         lat_pace, lon_pace = get_pace_latlon(matchup.filepath_pace)
 
-    comp_dict = defaultdict(lambda: defaultdict(lambda: dict()))
+    comp_dict = defaultdict(lambda: defaultdict(dict))
     for ec_short_name, match_list in matches.items():
         for i, match in enumerate(match_list):
             assert isinstance(match, MatchEarthcare)
@@ -240,8 +240,12 @@ def get_comparison_dict(
             comp_dict[ec_short_name][i]["end"] = end
             comp_dict[ec_short_name][i]["latitude"] = lat_ec
             comp_dict[ec_short_name][i]["longitude"] = lon_ec
-            pace_arr_interp = interp(pace_arr, lat_pace, lon_pace, None, lat_ec, lon_ec, None)
+            pace_arr_interp = interp(
+                pace_arr, lat_pace, lon_pace, None, lat_ec, lon_ec, None
+            )
             for j, pace_var in enumerate(pace_variables):
-                comp_dict[ec_short_name][i][pace_var] = pace_arr_interp[..., j].squeeze()
+                comp_dict[ec_short_name][i][pace_var] = pace_arr_interp[
+                    ..., j
+                ].squeeze()
             comp_dict[ec_short_name][i]["filepath_earthcare"] = match.filepath_earthcare
     return comp_dict
