@@ -1,0 +1,16 @@
+name: CI
+
+on: [ push, pull_request ]
+
+jobs:
+  check-and-format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: install ruff
+        uses: astral-sh/ruff-action@v4.1.0
+      - name: ruff check
+        run: ruff check --output-format=github
+      - name: ruff format
+        run: ruff format --check
