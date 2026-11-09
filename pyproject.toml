@@ -1,5 +1,5 @@
 [project]
-version = "0.1.0"
+version = "1.0.0"
 name = "pace_earthcare_matchups"
 authors = [{ name = "Sean Foley", email = "sean.r.foley@nasa.gov" }]
 dependencies = [
