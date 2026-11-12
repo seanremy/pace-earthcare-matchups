@@ -3,6 +3,8 @@ filenames.
 """
 
 import os
+import time
+import traceback
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -14,6 +16,7 @@ import requests
 from dateutil import parser
 from pystac.client import Client
 from pystac.item import Item
+from requests.exceptions import HTTPError
 from tqdm.notebook import tqdm
 
 from pace_earthcare_matchups.path_utils import PATH_TOKEN, get_path
@@ -58,11 +61,15 @@ def get_short_term_token() -> str:
     return access_token
 
 
-def download_earthcare_item(item: Item, datadir: Path) -> Path:
+def download_earthcare_item(
+    item: Item, datadir: Path, max_api_attempts: int = 3
+) -> Path:
     """Download the EarthCARE file described by the provided STAC item.
 
     :param item: STAC entry corresponding to an EarthCARE file.
     :param datadir: Directory into which the EarthCARE file will be downloaded.
+    :param max_api_attempts: Maximum number of attempts to try downloading the file, in
+        the case an HTTPError is encountered.
     :returns: Path to the downloaded EarthCARE file.
     """
     url_h5 = item.assets["enclosure_h5"].href
@@ -76,12 +83,27 @@ def download_earthcare_item(item: Item, datadir: Path) -> Path:
     path_outfile = datadir / filename
     if path_outfile.exists():
         return path_outfile
-    response = requests.get(
-        url_h5,
-        headers={"Authorization": f"Bearer {get_short_term_token()}"},
-        stream=True,
-    )
-    response.raise_for_status()
+    response = None
+    for attempt_count in range(max_api_attempts):
+        try:
+            response = requests.get(
+                url_h5,
+                headers={"Authorization": f"Bearer {get_short_term_token()}"},
+                stream=True,
+            )
+            response.raise_for_status()
+            break
+        except HTTPError:
+            if attempt_count < max_api_attempts - 1:
+                print(
+                    f"HTTPError on query #{attempt_count + 1} to download {filename}. Trying again in 2 seconds:"
+                )
+                traceback.print_exc()
+                time.sleep(2)
+            else:
+                print(f"Got {max_api_attempts} in a row:")
+                raise
+    assert isinstance(response, requests.Response)
     content_length = int(response.headers.get("content-length", 0))
     os.makedirs(datadir, exist_ok=True)
     with open(path_outfile, "wb") as outfile:
